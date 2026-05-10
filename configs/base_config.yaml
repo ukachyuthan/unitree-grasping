@@ -1,0 +1,44 @@
+# Base SAC Training Configuration
+training:
+  algorithm: "SAC"
+  num_env_steps: 1000000
+  learning_rate: 3e-4
+  buffer_size: 1000000
+  batch_size: 256
+  gamma: 0.99
+  tau: 0.005
+  alpha_lr: 3e-4
+  auto_entropy_tuning: true
+  
+  # Training loop
+  eval_freq: 10000
+  eval_episodes: 5
+  save_freq: 50000
+  log_freq: 1000
+
+environment:
+  # Isaac Gym settings
+  num_envs: 4096
+  device: "cuda:0"
+  
+  # G1 Robot specifics
+  robot_model: "unitree_g1"
+  
+  # Observation and action spaces
+  obs_dim: null  # Will be auto-detected
+  action_dim: null  # Will be auto-detected
+  action_scale: 1.0
+  
+  # Simulation parameters
+  sim_dt: 0.005
+  control_dt: 0.05
+  max_episode_length: 1000
+  
+# Logging
+logging:
+  log_level: "INFO"
+  use_tensorboard: true
+  use_wandb: false
+  project_name: "unitree-g1-walking"
+  
+seed: 42
