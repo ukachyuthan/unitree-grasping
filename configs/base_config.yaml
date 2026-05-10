@@ -18,7 +18,7 @@ training:
 
 environment:
   # Isaac Gym settings
-  num_envs: 4096
+  num_envs: 512
   device: "cuda:0"
   
   # G1 Robot specifics

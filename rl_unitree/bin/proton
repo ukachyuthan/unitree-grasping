@@ -1,4 +1,4 @@
-#!/home/achyuthan/unitree-walking/rl_unitree/bin/python3
+#!/home/achyuthan/unitree-walking/rl_unitree/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys

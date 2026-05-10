@@ -8,8 +8,8 @@ stable-baselines3>=2.0.0
 numpy>=1.23.0
 scipy>=1.10.0
 
-# Isaac Gym - Install separately (see ISAAC_GYM_GUIDE.md)
-# isaacgym must be installed from NVIDIA directly
+# Isaac Lab - Modern GPU-accelerated simulation
+isaaclab>=1.0.0
 
 # Utilities
 pyyaml>=6.0
