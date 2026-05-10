@@ -17,8 +17,8 @@ parser = argparse.ArgumentParser(description="Train G1 walking in Isaac Lab")
 parser.add_argument("--task", type=str, default="Isaac-Velocity-Flat-G1-v0",
                     choices=["Isaac-Velocity-Flat-G1-v0", "Isaac-Velocity-Rough-G1-v0"],
                     help="Isaac Lab task ID")
-parser.add_argument("--num_envs", type=int, default=64,
-                    help="Number of parallel envs (64 recommended for 8GB VRAM)")
+parser.add_argument("--num_envs", type=int, default=512,
+                    help="Number of parallel envs (512 recommended; use 256 if OOM on 8GB VRAM)")
 parser.add_argument("--max_iterations", type=int, default=None,
                     help="Override max training iterations from config")
 parser.add_argument("--log_dir", type=str, default="data/isaaclab_logs",
@@ -72,19 +72,23 @@ def main():
     if args.max_iterations is not None:
         runner_cfg.max_iterations = args.max_iterations
 
-    os.makedirs(args.log_dir, exist_ok=True)
+    from datetime import datetime
+    run_name = f"{args.task.replace('Isaac-Velocity-', '').replace('-v0', '').lower()}_envs{args.num_envs}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    run_dir = os.path.join(args.log_dir, run_name)
+    os.makedirs(run_dir, exist_ok=True)
+    print(f"[train] Logging to {run_dir}")
 
     # ── Train ─────────────────────────────────────────────────────────────────
     runner = OnPolicyRunner(
         env,
         runner_cfg.to_dict(),
-        log_dir=args.log_dir,
+        log_dir=run_dir,
         device=device,
     )
     runner.learn(num_learning_iterations=runner_cfg.max_iterations, init_at_random_ep_len=True)
 
     # ── Save final policy ─────────────────────────────────────────────────────
-    final_path = os.path.join(args.log_dir, f"g1_flat_final.pt")
+    final_path = os.path.join(run_dir, f"g1_flat_final.pt")
     runner.save(final_path)
     print(f"[train] Saved final policy to {final_path}")
 
