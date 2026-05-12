@@ -1,0 +1,494 @@
+--- git status ---
+On branch first-walking-model
+Your branch is up to date with 'origin/first-walking-model'.
+
+Changes not staged for commit:
+  (use "git add/rm <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   configs/base_config.yaml
+	modified:   environments/isaac_gym_env.py
+	modified:   requirements.txt
+	modified:   rl_unitree/bin/f2py
+	modified:   rl_unitree/bin/isympy
+	deleted:    rl_unitree/bin/numpy-config
+	modified:   rl_unitree/bin/proton
+	modified:   rl_unitree/bin/proton-viewer
+	modified:   rl_unitree/bin/torchfrtrace
+	modified:   rl_unitree/bin/torchrun
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	data/isaaclab_logs/
+	rl_unitree/bin/backend-test-tools
+	rl_unitree/bin/check-model
+	rl_unitree/bin/check-node
+	rl_unitree/bin/convert-caffe2-to-onnx
+	rl_unitree/bin/convert-onnx-to-caffe2
+	rl_unitree/bin/dotenv
+	rl_unitree/bin/hf
+	rl_unitree/bin/httpx
+	rl_unitree/bin/huggingface-cli
+	rl_unitree/bin/imageio_download_bin
+	rl_unitree/bin/imageio_remove_bin
+	rl_unitree/bin/isaaclab
+	rl_unitree/bin/isaacsim
+	rl_unitree/bin/jp.py
+	rl_unitree/bin/markdown-it
+	rl_unitree/bin/pygrun
+	rl_unitree/bin/tiny-agents
+	rl_unitree/bin/transformers
+	rl_unitree/bin/trimesh
+	rl_unitree/bin/typer
+	scripts/train_isaaclab_g1.py
+	scripts/verify_isaaclab.py
+
+no changes added to commit (use "git add" and/or "git commit -a") 
+
+
+--- git diff ---
+diff --git a/configs/base_config.yaml b/configs/base_config.yaml
+index 4633690..90a3819 100644
+--- a/configs/base_config.yaml
++++ b/configs/base_config.yaml
+@@ -18,7 +18,7 @@ training:
+ 
+ environment:
+   # Isaac Gym settings
+-  num_envs: 4096
++  num_envs: 512
+   device: "cuda:0"
+   
+   # G1 Robot specifics
+diff --git a/environments/isaac_gym_env.py b/environments/isaac_gym_env.py
+index 6bea81e..03f5aa8 100644
+--- a/environments/isaac_gym_env.py
++++ b/environments/isaac_gym_env.py
+@@ -1,17 +1,21 @@
+ """
+-Isaac Gym environment for G1 walking with multiple terrain types
++IsaacLab environment for G1 walking with multiple terrain types
+ """
+ import torch
+ import numpy as np
+ from typing import Dict, Tuple
+-from isaacgym import gymapi, gymutil
++import omni.isaac.lab as isaac_lab
++from omni.isaac.lab.envs import DirectRLEnv
++from omni.isaac.lab.assets import Articulation, RigidObject
++from omni.isaac.lab.scene import InteractiveScene
++import omni.isaac.lab_tasks
+ 
+ from .g1_walking_env import G1WalkingEnv
+ 
+ 
+ class IsaacGymG1Environment(G1WalkingEnv):
+     """
+-    G1 walking environment using NVIDIA Isaac Gym
++    G1 walking environment using NVIDIA IsaacLab
+     
+     Features:
+     - Parallel environment execution on GPU
+@@ -26,7 +30,7 @@ class IsaacGymG1Environment(G1WalkingEnv):
+                  terrain_config: Dict = None,
+                  headless: bool = True):
+         """
+-        Initialize Isaac Gym G1 environment
++        Initialize IsaacLab G1 environment
+         
+         Args:
+             num_envs: Number of parallel environments
+@@ -40,21 +44,14 @@ class IsaacGymG1Environment(G1WalkingEnv):
+         self.device_type = "cuda" if "cuda" in device else "cpu"
+         self.device_id = int(device.split(":")[-1]) if ":" in device else 0
+         
+-        # Initialize Isaac Gym
+-        self.gym = gymapi.Gym()
++        # Initialize IsaacLab
++        self.env_index = 0
+         
+-        # Create simulation
+-        self.sim = self._create_simulation()
++        # Create scene
++        self.scene = self._create_scene()
+         
+         # Load assets
+-        self.g1_asset = self._load_g1_model()
+-        self.terrain_asset = self._load_terrain_assets()
+-        
+-        # Create environments and actors
+-        self.envs = []
+-        self.g1_handles = []
+-        self.terrain_handles = []
+-        self._create_environments()
++        self.g1_articulation = self._load_g1_model()
+         
+         # Prepare tensors
+         self._prepare_tensors()
+@@ -63,108 +60,66 @@ class IsaacGymG1Environment(G1WalkingEnv):
+         self.episode_steps = torch.zeros(num_envs, device=device)
+         self.max_episode_length = 1000
+         
+-    def _create_simulation(self):
+-        """Create Isaac Gym simulation"""
+-        sim_params = gymapi.SimParams()
+-        sim_params.dt = 0.005  # 200 Hz simulation
+-        sim_params.substeps = 2
+-        sim_params.gravity = gymapi.Vec3(0.0, 0.0, -9.81)
+-        
+-        # PhysX parameters
+-        sim_params.physx.use_gpu = True
+-        sim_params.physx.num_threads = 4
+-        sim_params.physx.solver_type = 1
+-        sim_params.physx.num_pos_iterations = 4
+-        sim_params.physx.num_vel_iterations = 1
+-        sim_params.physx.rest_offset = 0.001
+-        sim_params.physx.contact_offset = 0.002
+-        sim_params.physx.friction_offset_threshold = 0.001
+-        sim_params.physx.friction_correlation_distance = 0.0005
+-        
+-        # Create simulation
+-        sim = self.gym.create_sim(
+-            compute_device_id=self.device_id,
+-            graphics_device_id=self.device_id,
+-            type=gymapi.SIM_PHYSX,
+-            params=sim_params
++    def _create_scene(self):
++        """Create IsaacLab scene"""
++        from omni.isaac.lab.sim import SimulationContext
++        
++        # Create simulation context
++        sim_context = SimulationContext(
++            physics_dt=0.005,  # 200 Hz simulation
++            rendering_dt=0.05,
++            backend="torch",
++            device=self.device,
++            num_envs=self.num_envs,
++            headless=self.headless
+         )
+         
+-        if not self.headless:
+-            self.gym.subscribe_viewer_keyboard_event(sim, gymapi.KEY_ESCAPE, "QUIT")
+-            self.gym.subscribe_viewer_keyboard_event(sim, gymapi.KEY_V, "toggle_viewer_sync")
++        # Set gravity
++        sim_context.scene.gravity = torch.tensor([0.0, 0.0, -9.81], device=self.device)
+         
+-        return sim
++        return sim_context
+     
+     def _load_g1_model(self):
+-        """Load G1 robot URDF model"""
+-        # TODO: Update this path to your G1 URDF
+-        asset_root = "path/to/unitree/assets"
+-        asset_file = "g1/g1.urdf"
+-        
+-        asset_options = gymapi.AssetOptions()
+-        asset_options.fix_base_link = False
+-        asset_options.flip_visual_attachments = False
+-        asset_options.armature = 0.001
+-        asset_options.thickness = 0.002
+-        asset_options.linear_damping = 0.0
+-        asset_options.angular_damping = 0.0
+-        asset_options.max_linear_velocity = 1000.0
+-        asset_options.max_angular_velocity = 1000.0
+-        asset_options.disable_gravity = False
+-        
+-        try:
+-            asset = self.gym.load_asset(self.sim, asset_root, asset_file, asset_options)
+-        except Exception as e:
+-            print(f"Warning: Could not load G1 asset: {e}")
+-            print("Using placeholder. Update path to actual G1 URDF.")
+-            asset = None
+-        
+-        return asset
+-    
+-    def _load_terrain_assets(self):
+-        """Load terrain meshes"""
+-        # Placeholder for terrain assets
+-        return {}
+-    
+-    def _create_environments(self):
+-        """Create parallel environments with robots and terrains"""
+-        spacing = 2.0
+-        env_lower = gymapi.Vec3(-spacing, 0.0, -spacing)
+-        env_upper = gymapi.Vec3(spacing, spacing, spacing)
+-        
+-        for i in range(self.num_envs):
+-            env = self.gym.create_env(self.sim, env_lower, env_upper, 8)
+-            self.envs.append(env)
+-            
+-            # Add G1 robot
+-            if self.g1_asset is not None:
+-                pose = gymapi.Transform()
+-                pose.p = gymapi.Vec3(0.0, 0.0, 0.5)
+-                pose.r = gymapi.Quat(0.0, 0.0, 0.0, 1.0)
+-                
+-                g1_handle = self.gym.create_actor(env, self.g1_asset, pose, "g1", i, 0)
+-                self.g1_handles.append(g1_handle)
+-            
+-            # Add ground plane
+-            plane_params = gymapi.PlaneParams()
+-            plane_params.normal = gymapi.Vec3(0, 0, 1)
+-            plane_params.distance = 0
+-            plane_params.static_friction = 1.0
+-            plane_params.dynamic_friction = 1.0
+-            plane_params.restitution = 0.0
+-            self.gym.add_ground(self.sim, plane_params)
++        """Load G1 robot model"""
++        from omni.isaac.lab.assets.articulation import ArticulationCfg, ArticulationData
++        
++        # Create G1 articulation config
++        g1_cfg = ArticulationCfg(
++            prim_path="/World/Robot",
++            usd_path="omniverse://localhost/NVIDIA/Assets/Isaac/4.0/Isaac/Robots/Unitree/G1/g1.usd",
++            scale=1.0,
++            init_state=ArticulationCfg.InitialStateCfg(
++                pos=(0.0, 0.0, 0.5),
++                rot=(0.0, 0.0, 0.0, 1.0),
++            ),
++            actuators={
++                "base_legs": {
++                    "joint_names": [
++                        ".*_hip_roll",
++                        ".*_hip_pitch",
++                        ".*_knee",
++                        ".*_ankle_pitch",
++                        ".*_ankle_roll"
++                    ],
++                    "effort_limit": 150.0,
++                    "velocity_limit": 100.0,
++                }
++            }
++        )
++        
++        # Create articulation
++        g1 = Articulation(self.scene, g1_cfg)
++        
++        return g1
+     
+     def _prepare_tensors(self):
+         """Prepare GPU tensors for state storage"""
+-        # Get DOF info
+-        if self.g1_handles:
+-            dof_info = self.gym.get_actor_dof_properties(self.envs[0], self.g1_handles[0])
+-            self.num_dofs = len(dof_info)
++        if self.g1_articulation is not None:
++            self.num_dofs = self.g1_articulation.num_dofs
+         else:
+             self.num_dofs = 19  # Default for G1
+         
+         # Allocate tensors
+-        self.g1_states = torch.zeros((self.num_envs, self.num_dofs * 2), device=self.device)
+         self.g1_pos = torch.zeros((self.num_envs, self.num_dofs), device=self.device)
+         self.g1_vel = torch.zeros((self.num_envs, self.num_dofs), device=self.device)
+         
+@@ -187,19 +142,20 @@ class IsaacGymG1Environment(G1WalkingEnv):
+         # Convert actions to tensor
+         actions_tensor = torch.from_numpy(actions).float().to(self.device)
+         
+-        # Apply actions to all environments
+-        for i, env in enumerate(self.envs):
+-            if i < len(self.g1_handles):
+-                # Scale actions to joint ranges
+-                scaled_actions = actions_tensor[i] * 0.5  # Adjust scale as needed
+-                self.gym.set_dof_actuation(env, self.g1_handles[i], scaled_actions)
++        # Scale actions to joint ranges
++        scaled_actions = actions_tensor * 0.5  # Adjust scale as needed
++        
++        # Apply actions to all environments via IsaacLab
++        if self.g1_articulation is not None:
++            self.g1_articulation.set_joint_effort_target(scaled_actions)
+         
+         # Step simulation
+-        self.gym.simulate(self.sim)
+-        self.gym.fetch_results(self.sim, True)
++        self.scene.step()
+         
+-        # Refresh state tensors
+-        self.gym.refresh_dof_state_tensor(self.sim)
++        # Refresh state from simulation
++        if self.g1_articulation is not None:
++            self.g1_pos = self.g1_articulation.data.joint_pos
++            self.g1_vel = self.g1_articulation.data.joint_vel
+         
+         # Get observations
+         obs = self._get_observations()
+@@ -215,9 +171,10 @@ class IsaacGymG1Environment(G1WalkingEnv):
+         self.episode_steps[dones] = 0
+         
+         # Reset environments that are done
+-        for i, done in enumerate(dones):
+-            if done:
+-                self._reset_env(i)
++        reset_indices = torch.where(dones)[0]
++        if len(reset_indices) > 0:
++            for idx in reset_indices:
++                self._reset_env(idx.item())
+         
+         infos = [{"episode_step": self.episode_steps[i].item()} for i in range(self.num_envs)]
+         
+@@ -225,44 +182,26 @@ class IsaacGymG1Environment(G1WalkingEnv):
+     
+     def reset(self) -> np.ndarray:
+         """Reset all environments and return initial observations"""
+-        for i in range(self.num_envs):
+-            self._reset_env(i)
++        if self.g1_articulation is not None:
++            # Reset all environments
++            indices = torch.arange(self.num_envs, device=self.device, dtype=torch.long)
++            self.g1_articulation.reset(indices)
+         
+         self.episode_steps.zero_()
+         return self._get_observations()
+     
+     def _reset_env(self, env_idx: int):
+         """Reset a single environment"""
+-        if env_idx < len(self.g1_handles):
+-            # Reset to default pose
+-            pose = gymapi.Transform()
+-            pose.p = gymapi.Vec3(0.0, 0.0, 0.5)
+-            pose.r = gymapi.Quat(0.0, 0.0, 0.0, 1.0)
+-            self.gym.set_actor_transform(
+-                self.envs[env_idx],
+-                self.g1_handles[env_idx],
+-                pose
+-            )
+-            
+-            # Zero velocities
+-            zero_vel = gymapi.Vec3(0, 0, 0)
+-            self.gym.set_actor_linear_velocity(self.envs[env_idx], self.g1_handles[env_idx], zero_vel)
+-            self.gym.set_actor_angular_velocity(self.envs[env_idx], self.g1_handles[env_idx], zero_vel)
+-            
+-            # Reset DOF states
+-            dof_states = torch.zeros((self.num_dofs, 2), dtype=torch.float32)
+-            self.gym.set_dof_state_tensor_indexed(
+-                self.sim,
+-                gymapi.unwrap_tensor(dof_states),
+-                gymapi.unwrap_tensor(torch.tensor([env_idx], dtype=torch.long)),
+-                1
+-            )
++        if self.g1_articulation is not None:
++            # Reset specific environment
++            idx_tensor = torch.tensor([env_idx], device=self.device, dtype=torch.long)
++            self.g1_articulation.reset(idx_tensor)
+     
+     def _get_observations(self) -> np.ndarray:
+         """Extract observations from current state"""
+         obs = torch.zeros((self.num_envs, self.obs_dim), device=self.device)
+         
+-        # Placeholder: Fill with joint positions and velocities
++        # Fill with joint positions and velocities
+         for i in range(min(self.num_envs, self.obs_dim // 2)):
+             if i < self.num_dofs:
+                 obs[:, i] = self.g1_pos[:, i]
+@@ -296,13 +235,10 @@ class IsaacGymG1Environment(G1WalkingEnv):
+     
+     def close(self):
+         """Clean up resources"""
+-        if hasattr(self, 'gym'):
+-            self.gym.destroy_sim(self.sim)
+-            if not self.headless:
+-                self.gym.destroy_viewer(self.viewer)
++        if hasattr(self, 'scene'):
++            self.scene.close()
+     
+     def render(self):
+         """Render the environment"""
+-        if not self.headless and hasattr(self, 'viewer'):
+-            self.gym.step_graphics(self.sim)
+-            self.gym.draw_viewer(self.viewer, self.sim, True)
++        if hasattr(self, 'scene') and not self.headless:
++            self.scene.render()
+diff --git a/requirements.txt b/requirements.txt
+index 9c4cff9..da87d58 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -8,8 +8,8 @@ stable-baselines3>=2.0.0
+ numpy>=1.23.0
+ scipy>=1.10.0
+ 
+-# Isaac Gym - Install separately (see ISAAC_GYM_GUIDE.md)
+-# isaacgym must be installed from NVIDIA directly
++# Isaac Lab - Modern GPU-accelerated simulation
++isaaclab>=1.0.0
+ 
+ # Utilities
+ pyyaml>=6.0
+diff --git a/rl_unitree/bin/f2py b/rl_unitree/bin/f2py
+index f8490a7..db16a01 100755
+--- a/rl_unitree/bin/f2py
++++ b/rl_unitree/bin/f2py
+@@ -1,4 +1,4 @@
+-#!/home/achyuthan/unitree-walking/rl_unitree/bin/python3
++#!/home/achyuthan/unitree-walking/rl_unitree/bin/python
+ # -*- coding: utf-8 -*-
+ import re
+ import sys
+diff --git a/rl_unitree/bin/isympy b/rl_unitree/bin/isympy
+index e3ff7a1..0af4186 100755
+--- a/rl_unitree/bin/isympy
++++ b/rl_unitree/bin/isympy
+@@ -1,4 +1,4 @@
+-#!/home/achyuthan/unitree-walking/rl_unitree/bin/python3
++#!/home/achyuthan/unitree-walking/rl_unitree/bin/python
+ # -*- coding: utf-8 -*-
+ import re
+ import sys
+diff --git a/rl_unitree/bin/numpy-config b/rl_unitree/bin/numpy-config
+deleted file mode 100755
+index 501ebb6..0000000
+--- a/rl_unitree/bin/numpy-config
++++ /dev/null
+@@ -1,8 +0,0 @@
+-#!/home/achyuthan/unitree-walking/rl_unitree/bin/python3
+-# -*- coding: utf-8 -*-
+-import re
+-import sys
+-from numpy._configtool import main
+-if __name__ == '__main__':
+-    sys.argv[0] = re.sub(r'(-script\.pyw|\.exe)?$', '', sys.argv[0])
+-    sys.exit(main())
+diff --git a/rl_unitree/bin/proton b/rl_unitree/bin/proton
+index 58df3e5..a3edda2 100755
+--- a/rl_unitree/bin/proton
++++ b/rl_unitree/bin/proton
+@@ -1,4 +1,4 @@
+-#!/home/achyuthan/unitree-walking/rl_unitree/bin/python3
++#!/home/achyuthan/unitree-walking/rl_unitree/bin/python
+ # -*- coding: utf-8 -*-
+ import re
+ import sys
+diff --git a/rl_unitree/bin/proton-viewer b/rl_unitree/bin/proton-viewer
+index d117952..504b154 100755
+--- a/rl_unitree/bin/proton-viewer
++++ b/rl_unitree/bin/proton-viewer
+@@ -1,4 +1,4 @@
+-#!/home/achyuthan/unitree-walking/rl_unitree/bin/python3
++#!/home/achyuthan/unitree-walking/rl_unitree/bin/python
+ # -*- coding: utf-8 -*-
+ import re
+ import sys
+diff --git a/rl_unitree/bin/torchfrtrace b/rl_unitree/bin/torchfrtrace
+index 28979da..c9497d7 100755
+--- a/rl_unitree/bin/torchfrtrace
++++ b/rl_unitree/bin/torchfrtrace
+@@ -1,8 +1,8 @@
+-#!/home/achyuthan/unitree-walking/rl_unitree/bin/python3
++#!/home/achyuthan/unitree-walking/rl_unitree/bin/python
+ # -*- coding: utf-8 -*-
+ import re
+ import sys
+-from torch.distributed.flight_recorder.fr_trace import main
++from tools.flight_recorder.fr_trace import main
+ if __name__ == '__main__':
+     sys.argv[0] = re.sub(r'(-script\.pyw|\.exe)?$', '', sys.argv[0])
+     sys.exit(main())
+diff --git a/rl_unitree/bin/torchrun b/rl_unitree/bin/torchrun
+index 4de7843..1e44414 100755
+--- a/rl_unitree/bin/torchrun
++++ b/rl_unitree/bin/torchrun
+@@ -1,4 +1,4 @@
+-#!/home/achyuthan/unitree-walking/rl_unitree/bin/python3
++#!/home/achyuthan/unitree-walking/rl_unitree/bin/python
+ # -*- coding: utf-8 -*-
+ import re
+ import sys

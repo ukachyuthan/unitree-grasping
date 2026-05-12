@@ -1,0 +1,23 @@
+# Core dependencies
+torch>=2.0.0
+torchvision>=0.15.0
+torchaudio>=2.0.0
+
+# RL training
+stable-baselines3>=2.0.0
+numpy>=1.23.0
+scipy>=1.10.0
+
+# Isaac Lab - Modern GPU-accelerated simulation
+isaaclab>=1.0.0
+
+# Utilities
+pyyaml>=6.0
+tqdm>=4.65.0
+tensorboard>=2.13.0
+wandb>=0.15.0
+
+# Development
+black>=23.0.0
+isort>=5.12.0
+pytest>=7.0.0

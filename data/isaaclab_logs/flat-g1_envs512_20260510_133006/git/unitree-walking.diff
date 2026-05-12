@@ -1,0 +1,68 @@
+--- git status ---
+On branch first-walking-model
+Your branch is up to date with 'origin/first-walking-model'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   data/isaaclab_logs/events.out.tfevents.1778441435.achyuthan-ubuntu.13120.0
+	modified:   scripts/train_isaaclab_g1.py
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	data/isaaclab_logs/flat-g1_envs512_20260510_133006/
+	data/isaaclab_logs/trajectory.npz
+	g1_policy.mp4
+	rl_unitree/bin/robot_descriptions
+	scripts/play_g1.py
+	scripts/visualize_g1.py
+
+no changes added to commit (use "git add" and/or "git commit -a") 
+
+
+--- git diff ---
+diff --git a/data/isaaclab_logs/events.out.tfevents.1778441435.achyuthan-ubuntu.13120.0 b/data/isaaclab_logs/events.out.tfevents.1778441435.achyuthan-ubuntu.13120.0
+index f15cff7..2f44e67 100644
+Binary files a/data/isaaclab_logs/events.out.tfevents.1778441435.achyuthan-ubuntu.13120.0 and b/data/isaaclab_logs/events.out.tfevents.1778441435.achyuthan-ubuntu.13120.0 differ
+diff --git a/scripts/train_isaaclab_g1.py b/scripts/train_isaaclab_g1.py
+index 56866a8..51f58cb 100644
+--- a/scripts/train_isaaclab_g1.py
++++ b/scripts/train_isaaclab_g1.py
+@@ -17,8 +17,8 @@ parser = argparse.ArgumentParser(description="Train G1 walking in Isaac Lab")
+ parser.add_argument("--task", type=str, default="Isaac-Velocity-Flat-G1-v0",
+                     choices=["Isaac-Velocity-Flat-G1-v0", "Isaac-Velocity-Rough-G1-v0"],
+                     help="Isaac Lab task ID")
+-parser.add_argument("--num_envs", type=int, default=64,
+-                    help="Number of parallel envs (64 recommended for 8GB VRAM)")
++parser.add_argument("--num_envs", type=int, default=512,
++                    help="Number of parallel envs (512 recommended; use 256 if OOM on 8GB VRAM)")
+ parser.add_argument("--max_iterations", type=int, default=None,
+                     help="Override max training iterations from config")
+ parser.add_argument("--log_dir", type=str, default="data/isaaclab_logs",
+@@ -72,19 +72,23 @@ def main():
+     if args.max_iterations is not None:
+         runner_cfg.max_iterations = args.max_iterations
+ 
+-    os.makedirs(args.log_dir, exist_ok=True)
++    from datetime import datetime
++    run_name = f"{args.task.replace('Isaac-Velocity-', '').replace('-v0', '').lower()}_envs{args.num_envs}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
++    run_dir = os.path.join(args.log_dir, run_name)
++    os.makedirs(run_dir, exist_ok=True)
++    print(f"[train] Logging to {run_dir}")
+ 
+     # ── Train ─────────────────────────────────────────────────────────────────
+     runner = OnPolicyRunner(
+         env,
+         runner_cfg.to_dict(),
+-        log_dir=args.log_dir,
++        log_dir=run_dir,
+         device=device,
+     )
+     runner.learn(num_learning_iterations=runner_cfg.max_iterations, init_at_random_ep_len=True)
+ 
+     # ── Save final policy ─────────────────────────────────────────────────────
+-    final_path = os.path.join(args.log_dir, f"g1_flat_final.pt")
++    final_path = os.path.join(run_dir, f"g1_flat_final.pt")
+     runner.save(final_path)
+     print(f"[train] Saved final policy to {final_path}")
+ 
