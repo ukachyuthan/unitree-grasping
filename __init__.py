@@ -1,19 +1,9 @@
 """
-Unitree Walking: Multi-Terrain RL Training for G1 Humanoid Robot
+Unitree Grasping — Point-Cloud RL for Novel-Object Pick-and-Place
+
+Policy trained entirely on procedural objects (superquadrics + convex hulls)
+using a PointNet encoder and GraspNet-bootstrapped reward.
+Zero-shot transfer to never-seen real objects via point cloud representation.
 """
 
-__version__ = "0.1.0"
-__author__ = "Your Name"
-
-from .utils import Logger, ConfigLoader
-from .policies import SACPolicy, PolicyManager
-from .training import ReplayBuffer, SACTrainer
-
-__all__ = [
-    "Logger",
-    "ConfigLoader", 
-    "SACPolicy",
-    "PolicyManager",
-    "ReplayBuffer",
-    "SACTrainer",
-]
+__version__ = "0.2.0"
