@@ -69,8 +69,10 @@ class GraspPoseEnv(DirectRLEnv):
         # ── Per-env state ──────────────────────────────────────────────────────
         B = self.num_envs
         self._env_shape    = torch.zeros(B, dtype=torch.long, device=self.device)
+        # _grasp_target: offset from object centre in object-LOCAL frame (metres).
+        # Converted to robot-base frame inside _do_approach by adding obj_base.
         self._grasp_target = torch.zeros(B, 3, device=self.device)
-        self._spawn_z      = torch.zeros(B, device=self.device)  # z at spawn time
+        self._spawn_z      = torch.zeros(B, device=self.device)  # world-frame z at spawn
         self._exec_step    = 0   # phase counter, reset in _pre_physics_step
 
         # Gripper open/close limits (radians, from joint limits)
@@ -173,13 +175,18 @@ class GraspPoseEnv(DirectRLEnv):
         self._exec_step += 1
 
     def _do_approach(self):
-        """Jacobian DLS IK step toward grasp target."""
+        """Jacobian DLS IK step toward grasp target (object-local offset)."""
         # EE position in robot-base frame
         ee_w    = self._robot.data.body_pos_w[:, self._ee_body_idx, :3]
         root_w  = self._robot.data.root_pos_w[:, :3]
         ee_base = ee_w - root_w              # (B, 3)
 
-        error   = self._grasp_target - ee_base  # (B, 3)
+        # Convert object-local grasp offset → robot-base frame target
+        obj_world = self._get_active_obj_pos()         # (B, 3) world frame
+        obj_base  = obj_world - root_w                 # (B, 3) robot-base frame
+        target_base = obj_base + self._grasp_target    # (B, 3) robot-base frame
+
+        error   = target_base - ee_base      # (B, 3)
 
         # Jacobian (num_envs, num_bodies-1, 6, num_dofs)
         J_full  = self._robot.root_physx_view.get_jacobians()
@@ -207,10 +214,9 @@ class GraspPoseEnv(DirectRLEnv):
         self._robot.set_joint_position_target(q_tgt, joint_ids=self._grip_dof_idx)
 
     def _do_lift(self):
-        """Move EE target upward by a fixed delta each step."""
-        delta_z = 0.15 / N_LIFT   # lift 15 cm total over N_LIFT steps
-        # Shift grasp target upward; IK then chases that
-        self._grasp_target[:, 2] += delta_z
+        """Lift EE straight up by shifting the local-frame z offset."""
+        delta_z = 0.15 / N_LIFT   # total 15 cm over N_LIFT steps
+        self._grasp_target[:, 2] += delta_z   # moves world-z up since +z=up
         self._do_approach()
 
     # ── Observations ──────────────────────────────────────────────────────────
@@ -222,24 +228,21 @@ class GraspPoseEnv(DirectRLEnv):
         return {"policy": pc_flat}
 
     def _synthesize_pointcloud(self) -> torch.Tensor:
-        """Sub-sample pre-loaded PCs + add 3mm Gaussian noise."""
+        """
+        Sub-sample pre-loaded PCs + add 3mm Gaussian noise.
+        Returns PC in OBJECT-LOCAL frame (centred at object origin).
+        This matches the pre-training frame so encoder weights transfer correctly.
+        The policy predicts grasp offsets in the same local frame;
+        _do_approach converts local → robot-base by adding obj_base.
+        """
         B  = self.num_envs
         shape_pcs = self._obj_pcs[self._env_shape]   # (B, 512, 3)
 
-        # Random sub-sample
-        idx = torch.randint(0, _PC_PRE_N, (B, NUM_PC_POINTS), device=self.device)
+        idx      = torch.randint(0, _PC_PRE_N, (B, NUM_PC_POINTS), device=self.device)
         pc_local = shape_pcs.gather(1, idx.unsqueeze(-1).expand(-1, -1, 3))  # (B, N, 3)
-
-        # Add noise
         pc_local = pc_local + torch.randn_like(pc_local) * _PC_NOISE_M
 
-        # Express in robot-base frame: translate by current object position
-        obj_pos = self._get_active_obj_pos()   # (B, 3) world frame
-        root_w  = self._robot.data.root_pos_w[:, :3]
-        obj_base = obj_pos - root_w             # object center in robot-base frame
-        pc_world = pc_local + obj_base.unsqueeze(1)
-
-        return pc_world.view(B, -1)   # (B, N*3)
+        return pc_local.view(B, -1)   # (B, N*3) in object-local frame
 
     def _get_active_obj_pos(self) -> torch.Tensor:
         """Return world-frame position of the active object in each env."""

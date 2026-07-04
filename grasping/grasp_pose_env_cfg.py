@@ -30,11 +30,11 @@ NUM_ACTIONS: int   = 3      # (x, y, z) grasp position, tanh-normalized
 OBS_DIM: int       = NUM_PC_POINTS * 3   # 384
 
 # ── Execution phases (in physics steps, total = decimation) ──────────────────
-N_APPROACH : int = 35   # steps moving EE toward grasp position
-N_CLOSE    : int = 15   # steps closing gripper
-N_LIFT     : int = 20   # steps lifting the arm upward
+N_APPROACH : int = 80   # steps moving EE toward grasp position
+N_CLOSE    : int = 20   # steps closing gripper
+N_LIFT     : int = 25   # steps lifting the arm upward
 N_HOLD     : int = 10   # hold at top + measure
-EXEC_STEPS : int = N_APPROACH + N_CLOSE + N_LIFT + N_HOLD   # 80
+EXEC_STEPS : int = N_APPROACH + N_CLOSE + N_LIFT + N_HOLD   # 135
 
 
 @configclass
@@ -42,8 +42,8 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
 
     # ── Timing ────────────────────────────────────────────────────────────────
     # episode_length_s covers exactly 1 agent step (= EXEC_STEPS physics steps)
-    decimation: int        = EXEC_STEPS                       # 80
-    episode_length_s: float = (EXEC_STEPS / 60.0) * 1.5      # 2 s, gives room for reset
+    decimation: int        = EXEC_STEPS                       # 135
+    episode_length_s: float = (EXEC_STEPS / 60.0) * 1.5      # ~3.4 s, gives room for reset
     action_space: int      = NUM_ACTIONS
     observation_space: int = OBS_DIM
     state_space: int       = 0
@@ -87,10 +87,12 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
         init_state=ArticulationCfg.InitialStateCfg(
             pos=(0.0, 0.0, 0.74),
             joint_pos={
-                "left_shoulder_pitch_joint":  0.50,
-                "left_shoulder_roll_joint":   0.10,
-                "left_shoulder_yaw_joint":    0.00,
-                "left_elbow_pitch_joint":     1.00,
+                # Pre-positioned over workspace (MuJoCo IK to x=0.30, z=0.90)
+                # EE starts at ~(0.30, 0.00, 0.90), 5.8cm from spawn centre
+                "left_shoulder_pitch_joint": -0.7840,
+                "left_shoulder_roll_joint":  -0.2726,
+                "left_shoulder_yaw_joint":   -0.0893,
+                "left_elbow_pitch_joint":     0.7579,
                 "left_elbow_roll_joint":      0.00,
                 "left_one_joint":             1.00,
                 "left_two_joint":             0.52,
@@ -187,15 +189,20 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
     object_convex_hull:   RigidObjectCfg = _usd_obj("convex_hull",   (0.5, 0.5, 0.9))
 
     # ── Workspace bounds for action de-normalization ──────────────────────────
-    # policy outputs tanh in [-1,1]^3; env maps to these world-frame bounds
-    grasp_x_bounds: tuple = (0.35, 0.65)   # robot-base X
-    grasp_y_bounds: tuple = (-0.15, 0.15)  # robot-base Y
-    grasp_z_bounds: tuple = (0.82, 1.00)   # just above table surface
+    # policy outputs tanh in [-1,1]^3; env maps to OBJECT-LOCAL frame offsets.
+    # Objects are mean-centred by trimesh so grasps are within ~±6cm of origin.
+    # The env converts local → robot-base in _do_approach by adding obj_base.
+    grasp_x_bounds: tuple = (-0.07, 0.07)
+    grasp_y_bounds: tuple = (-0.07, 0.07)
+    grasp_z_bounds: tuple = (-0.07, 0.07)
 
     # ── Task geometry ─────────────────────────────────────────────────────────
+    # Objects spawn on near edge of table (x=0.22-0.32 at robot-base frame).
+    # Table center is at x=0.50 with 0.80m half-width, so near edge at x=0.10.
+    # The G1 left arm can reach x≤0.33 at table height; keep objects within that.
     table_surface_z: float = 0.80
-    spawn_x_range: tuple   = (0.42, 0.58)
-    spawn_y_range: tuple   = (-0.10, 0.10)
+    spawn_x_range: tuple   = (0.22, 0.32)
+    spawn_y_range: tuple   = (-0.08, 0.08)
 
     # ── Reward ────────────────────────────────────────────────────────────────
     lift_target_m: float    = 0.12    # full reward when lifted 12 cm
@@ -210,5 +217,5 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
     left_gripper_joint_names: list = ["left_one_joint", "left_two_joint"]
     ee_body_name: str = "left_palm_link"
 
-    # IK step size
-    ik_alpha: float = 0.08   # joint step size per physics step during approach
+    # IK step size — needs to be large enough to traverse ~60cm from home pose
+    ik_alpha: float = 0.20   # joint step size per physics step during approach
