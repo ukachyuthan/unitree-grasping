@@ -68,9 +68,10 @@ class GraspPoseEnv(DirectRLEnv):
 
         # ── Per-env state ──────────────────────────────────────────────────────
         B = self.num_envs
-        self._env_shape   = torch.zeros(B, dtype=torch.long, device=self.device)
+        self._env_shape    = torch.zeros(B, dtype=torch.long, device=self.device)
         self._grasp_target = torch.zeros(B, 3, device=self.device)
-        self._exec_step   = 0   # phase counter, reset in _pre_physics_step
+        self._spawn_z      = torch.zeros(B, device=self.device)  # z at spawn time
+        self._exec_step    = 0   # phase counter, reset in _pre_physics_step
 
         # Gripper open/close limits (radians, from joint limits)
         self._gripper_open  = torch.tensor([ 1.00,  0.52], device=self.device)
@@ -116,6 +117,7 @@ class GraspPoseEnv(DirectRLEnv):
         spawn_x = torch.empty(n, device=self.device).uniform_(*self.cfg.spawn_x_range)
         spawn_y = torch.empty(n, device=self.device).uniform_(*self.cfg.spawn_y_range)
         spawn_z = torch.full((n,), self.cfg.table_surface_z + 0.05, device=self.device)
+        self._spawn_z[env_ids] = spawn_z   # record for reward computation
 
         for i, obj in enumerate(self._objs):
             pos = torch.zeros(n, 3, device=self.device)
@@ -251,9 +253,12 @@ class GraspPoseEnv(DirectRLEnv):
     # ── Rewards ───────────────────────────────────────────────────────────────
 
     def _get_rewards(self) -> torch.Tensor:
-        obj_pos  = self._get_active_obj_pos()
-        lift_h   = (obj_pos[:, 2] - self.cfg.table_surface_z).clamp(min=0.0)
-        reward   = (lift_h / self.cfg.lift_target_m).clamp(max=1.0)
+        obj_z    = self._get_active_obj_pos()[:, 2]
+        # Measure how far the object moved UP from its spawn position.
+        # Objects start at spawn_z ≈ table + 5 cm; resting on table they stay there.
+        # A successful grasp lifts them above spawn_z by lift_threshold_m.
+        delta    = (obj_z - self._spawn_z).clamp(min=0.0)
+        reward   = (delta >= self.cfg.lift_threshold_m).float()
         return reward
 
     # ── Dones ─────────────────────────────────────────────────────────────────

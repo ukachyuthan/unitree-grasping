@@ -115,7 +115,7 @@ def main():
         num_actions=NUM_ACTIONS,
         num_pc_points=args.num_pc_points,
         pc_embed_dim=args.pc_embed_dim,
-        init_noise_std=0.5,
+        init_noise_std=1.0,   # wider exploration; std decays via PPO adaptive lr
     ).to(device)
 
     # Optional warm start — only loads encoder, not the prediction head.
