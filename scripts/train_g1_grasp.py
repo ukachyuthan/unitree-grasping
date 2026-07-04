@@ -89,6 +89,8 @@ def make_runner_cfg(max_iters: int) -> dict:
 
 
 def main():
+    # Physics runs on CPU (IOMMU incompatibility with GPU PhysX on this machine).
+    # Neural network (PPO, PointNet) still runs on CUDA.
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"[grasp-train] device={device}  envs={args.num_envs}")
 

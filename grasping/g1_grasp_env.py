@@ -3,128 +3,40 @@ G1 left-arm pick-and-place environment  (DirectRLEnv).
 
 Key design choices
 ──────────────────
-• During training, point clouds are synthesized from ground-truth object geometry
-  + 3 mm Gaussian noise — identical to DexPoint / UniDexGrasp.  This removes the
-  RTX rendering dependency and cuts wall-clock iteration time by ~3×.
-• At deployment, swap _synthesize_pointcloud() for depth_to_pointcloud_world() in
-  pointcloud_utils.py with the real camera's K and T_cam_robot.  Policy weights
-  transfer unchanged because the observation format is identical.
-• Action interface: joint-space Δ (5 arm DOF + gripper) via use_joint_space_control,
-  or EE-space Δ(pos, rot) → Jacobian-transpose IK for robot-agnostic deployment.
-
-Episode:
-  1. Spawn one random primitive (box / sphere / cylinder) on table at A.
-  2. Sample a random goal B on same surface.
-  3. Phase 0 – approach: reward = −‖EE − object‖
-     Phase 1 – lift:     reward = clip(object_z − table_z, 0, max)
-     Phase 2 – place:    reward = −‖object_xy − goal_xy‖ + success_bonus
+• Training uses pre-sampled surface point clouds (loaded from .npy at init) +
+  3 mm Gaussian noise — identical to DexPoint / UniDexGrasp.  No rendering needed.
+• 12 procedural shape families; one random shape per episode per env.
+• At deployment, replace _synthesize_pointcloud() with depth_to_pointcloud_world()
+  from pointcloud_utils.py.  Policy weights transfer unchanged.
 """
 
 from __future__ import annotations
 
-import math
+import os
 from collections.abc import Sequence
 
+import numpy as np
 import torch
 
 from isaaclab.assets import Articulation, RigidObject
 from isaaclab.envs import DirectRLEnv
-from isaaclab.utils.math import (
-    quat_rotate,
-    quat_conjugate,
-    subtract_frame_transforms,
-)
+from isaaclab.utils.math import quat_rotate, quat_conjugate, subtract_frame_transforms
 import isaaclab.sim as sim_utils
 
 from grasping.g1_grasp_env_cfg import G1GraspEnvCfg, NUM_PC_POINTS
 
-SHAPE_BOX      = 0
-SHAPE_SPHERE   = 1
-SHAPE_CYLINDER = 2
-NUM_SHAPES     = 3
+# ── Shape index ↔ cfg attribute name ↔ PC file ──────────────────────────────
+# Order must match the RigidObjectCfg field names in G1GraspEnvCfg.
+_SHAPE_NAMES = [
+    "torus", "l_shape", "t_shape", "c_shape",
+    "dumbbell", "wedge", "star_prism", "bracket",
+    "stepped_cyl", "twisted_bar", "irregular_ext", "convex_hull",
+]
+NUM_SHAPES = len(_SHAPE_NAMES)
 
-# Object dimensions matching spawn configs in G1GraspEnvCfg
-_BOX_HALF = (0.02, 0.02, 0.05)   # CuboidCfg size=(0.04, 0.04, 0.10)
-_SPH_RAD  = 0.04                  # SphereCfg  radius=0.04
-_CYL_RAD  = 0.03                  # CylinderCfg radius=0.03
-_CYL_H    = 0.12                  # CylinderCfg height=0.12
-_PC_NOISE = 0.003                 # sensor noise std (3 mm)
+_PC_NOISE    = 0.003   # sensor noise std (3 mm)
+_PC_PRE_N    = 512     # points in the pre-sampled numpy PCs
 
-
-# ── Surface samplers ─────────────────────────────────────────────────────────
-
-def _sample_box_surface(n_envs: int, n_pts: int,
-                        hx: float, hy: float, hz: float,
-                        device: torch.device) -> torch.Tensor:
-    """Uniform surface sample from box with half-extents (hx,hy,hz). Returns (B,N,3)."""
-    ax, ay, az = hy * hz, hx * hz, hx * hy
-    probs = torch.tensor([ax, ax, ay, ay, az, az], dtype=torch.float32, device=device)
-    probs = probs / probs.sum()
-    face  = torch.multinomial(probs.unsqueeze(0).expand(n_envs * n_pts, -1), 1).squeeze(-1)
-    u = torch.rand(n_envs * n_pts, device=device) * 2 - 1
-    v = torch.rand(n_envs * n_pts, device=device) * 2 - 1
-    pts = torch.zeros(n_envs * n_pts, 3, device=device)
-    m = face == 0; pts[m, 0] =  hx; pts[m, 1] = hy * u[m]; pts[m, 2] = hz * v[m]
-    m = face == 1; pts[m, 0] = -hx; pts[m, 1] = hy * u[m]; pts[m, 2] = hz * v[m]
-    m = face == 2; pts[m, 1] =  hy; pts[m, 0] = hx * u[m]; pts[m, 2] = hz * v[m]
-    m = face == 3; pts[m, 1] = -hy; pts[m, 0] = hx * u[m]; pts[m, 2] = hz * v[m]
-    m = face == 4; pts[m, 2] =  hz; pts[m, 0] = hx * u[m]; pts[m, 1] = hy * v[m]
-    m = face == 5; pts[m, 2] = -hz; pts[m, 0] = hx * u[m]; pts[m, 1] = hy * v[m]
-    return pts.reshape(n_envs, n_pts, 3)
-
-
-def _sample_sphere_surface(n_envs: int, n_pts: int,
-                            radius: float, device: torch.device) -> torch.Tensor:
-    """Uniform surface sample from sphere. Returns (B,N,3)."""
-    pts = torch.randn(n_envs * n_pts, 3, device=device)
-    pts = pts / (pts.norm(dim=-1, keepdim=True) + 1e-8) * radius
-    return pts.reshape(n_envs, n_pts, 3)
-
-
-def _sample_cylinder_surface(n_envs: int, n_pts: int,
-                              radius: float, height: float,
-                              device: torch.device) -> torch.Tensor:
-    """Uniform surface sample from cylinder (barrel + 2 caps). Returns (B,N,3)."""
-    barrel_a = 2 * math.pi * radius * height
-    cap_a    = math.pi * radius ** 2
-    total    = barrel_a + 2 * cap_a
-    probs = torch.tensor([barrel_a, cap_a, cap_a], dtype=torch.float32, device=device)
-    probs = probs / total
-    part  = torch.multinomial(probs.unsqueeze(0).expand(n_envs * n_pts, -1), 1).squeeze(-1)
-
-    pts = torch.zeros(n_envs * n_pts, 3, device=device)
-
-    # Barrel
-    m = part == 0
-    if m.any():
-        theta = torch.rand(m.sum(), device=device) * 2 * math.pi
-        z     = torch.rand(m.sum(), device=device) * height - height / 2
-        pts[m, 0] = radius * torch.cos(theta)
-        pts[m, 1] = radius * torch.sin(theta)
-        pts[m, 2] = z
-
-    # Top cap
-    m = part == 1
-    if m.any():
-        r_  = torch.sqrt(torch.rand(m.sum(), device=device)) * radius
-        th_ = torch.rand(m.sum(), device=device) * 2 * math.pi
-        pts[m, 0] = r_ * torch.cos(th_)
-        pts[m, 1] = r_ * torch.sin(th_)
-        pts[m, 2] = height / 2
-
-    # Bottom cap
-    m = part == 2
-    if m.any():
-        r_  = torch.sqrt(torch.rand(m.sum(), device=device)) * radius
-        th_ = torch.rand(m.sum(), device=device) * 2 * math.pi
-        pts[m, 0] = r_ * torch.cos(th_)
-        pts[m, 1] = r_ * torch.sin(th_)
-        pts[m, 2] = -height / 2
-
-    return pts.reshape(n_envs, n_pts, 3)
-
-
-# ── Environment ──────────────────────────────────────────────────────────────
 
 class G1GraspEnv(DirectRLEnv):
     cfg: G1GraspEnvCfg
@@ -140,7 +52,6 @@ class G1GraspEnv(DirectRLEnv):
         ee_bodies, _ = self._robot.find_bodies(self.cfg.ee_body_name)
         self._ee_body_idx = ee_bodies[0]
 
-        # Arm / gripper joint limits
         self._arm_lo = self._robot.data.soft_joint_pos_limits[0, self._arm_dof_idx, 0].to(self.device)
         self._arm_hi = self._robot.data.soft_joint_pos_limits[0, self._arm_dof_idx, 1].to(self.device)
         g_lo = self._robot.data.soft_joint_pos_limits[0, self._grip_dof_idx, 0].to(self.device)
@@ -148,28 +59,44 @@ class G1GraspEnv(DirectRLEnv):
         self._grip_open  = g_hi
         self._grip_close = g_lo
 
-        self._joint_targets = self._robot.data.default_joint_pos.clone()  # (B, J)
+        self._joint_targets = self._robot.data.default_joint_pos.clone()
 
-        self._env_shape   = torch.arange(self.num_envs, device=self.device) % NUM_SHAPES
+        # ── Per-env state ──────────────────────────────────────────────────
+        self._env_shape   = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
         self._goal_pos_w  = torch.zeros(self.num_envs, 3, device=self.device)
         self._prev_action = torch.zeros(self.num_envs, self.cfg.action_space, device=self.device)
+
+        # ── Pre-load object point clouds ───────────────────────────────────
+        # Shape (NUM_SHAPES, _PC_PRE_N, 3) — stored on GPU for fast sampling
+        obj_dir = self.cfg._OBJ_DIR
+        pcs = []
+        for name in _SHAPE_NAMES:
+            pc_path = os.path.join(obj_dir, name, "000_pc.npy")
+            if os.path.exists(pc_path):
+                pc = torch.from_numpy(np.load(pc_path)).float().to(self.device)  # (512, 3)
+            else:
+                # Fallback: unit sphere if file missing
+                pc = torch.randn(_PC_PRE_N, 3, device=self.device)
+                pc = pc / pc.norm(dim=-1, keepdim=True) * 0.04
+                print(f"[GraspEnv] WARNING: PC file not found for {name}, using sphere fallback")
+            pcs.append(pc)
+        self._obj_pcs = torch.stack(pcs, dim=0)  # (NUM_SHAPES, 512, 3)
 
     # ── Scene ────────────────────────────────────────────────────────────────
     def _setup_scene(self):
         self._robot = Articulation(self.cfg.robot)
         self.scene.articulations["robot"] = self._robot
 
-        self._table        = RigidObject(self.cfg.table)
-        self._obj_box      = RigidObject(self.cfg.object_box)
-        self._obj_sphere   = RigidObject(self.cfg.object_sphere)
-        self._obj_cylinder = RigidObject(self.cfg.object_cylinder)
-        for name, obj in [
-            ("table",        self._table),
-            ("obj_box",      self._obj_box),
-            ("obj_sphere",   self._obj_sphere),
-            ("obj_cylinder", self._obj_cylinder),
-        ]:
-            self.scene.rigid_objects[name] = obj
+        self._table = RigidObject(self.cfg.table)
+        self.scene.rigid_objects["table"] = self._table
+
+        # Load all 12 shape objects
+        self._objs: list[RigidObject] = []
+        for name in _SHAPE_NAMES:
+            cfg_attr = f"object_{name}"
+            obj = RigidObject(getattr(self.cfg, cfg_attr))
+            self._objs.append(obj)
+            self.scene.rigid_objects[f"obj_{name}"] = obj
 
         self.scene.clone_environments(copy_from_source=False)
 
@@ -182,7 +109,7 @@ class G1GraspEnv(DirectRLEnv):
         actions = actions.clamp(-1.0, 1.0)
 
         if self.cfg.use_joint_space_control:
-            arm_delta = actions[:, : self._num_arm_dofs] * self.cfg.arm_action_scale
+            arm_delta = actions[:, :self._num_arm_dofs] * self.cfg.arm_action_scale
             new_arm = (self._joint_targets[:, self._arm_dof_idx] + arm_delta).clamp(
                 self._arm_lo, self._arm_hi
             )
@@ -191,7 +118,7 @@ class G1GraspEnv(DirectRLEnv):
             self._apply_ee_delta(actions[:, :6])
 
         gripper_cmd = actions[:, -1]
-        close = (gripper_cmd > 0.0)
+        close = gripper_cmd > 0.0
         g_tgt = torch.where(
             close.unsqueeze(-1),
             self._grip_close.unsqueeze(0).expand(self.num_envs, -1),
@@ -203,18 +130,14 @@ class G1GraspEnv(DirectRLEnv):
         self._robot.set_joint_position_target(self._joint_targets)
 
     def _apply_ee_delta(self, ee_delta: torch.Tensor) -> None:
-        """Jacobian-transpose IK: Δ(pos, rot) → Δjoint.
-        Isaac Lab jacobian shape: (B, num_bodies * 6, num_dofs).
-        EE body rows are at indices [ee_body_idx*6 : ee_body_idx*6+6].
-        """
-        jac_full = self._robot.root_physx_view.get_jacobians()  # (B, L*6, D)
+        jac_full = self._robot.root_physx_view.get_jacobians()
         row0 = self._ee_body_idx * 6
-        J = jac_full[:, row0:row0 + 6, :][:, :, self._arm_dof_idx]  # (B, 6, num_arm_dofs)
+        J = jac_full[:, row0:row0 + 6, :][:, :, self._arm_dof_idx]
         delta_ee = torch.cat([
             ee_delta[:, :3] * self.cfg.arm_action_scale,
             ee_delta[:, 3:] * self.cfg.rot_action_scale,
-        ], dim=-1)  # (B, 6)
-        dq = torch.bmm(J.transpose(1, 2), delta_ee.unsqueeze(-1)).squeeze(-1)  # (B, num_arm_dofs)
+        ], dim=-1)
+        dq = torch.bmm(J.transpose(1, 2), delta_ee.unsqueeze(-1)).squeeze(-1)
         new_arm = (self._joint_targets[:, self._arm_dof_idx] + dq).clamp(
             self._arm_lo, self._arm_hi
         )
@@ -229,12 +152,8 @@ class G1GraspEnv(DirectRLEnv):
         base_pos  = self._robot.data.root_pos_w
         base_quat = self._robot.data.root_quat_w
 
-        ee_pos_b, ee_quat_b = subtract_frame_transforms(
-            base_pos, base_quat, ee_pos_w, ee_quat_w
-        )
-        goal_quat_w = torch.tensor(
-            [[1.0, 0.0, 0.0, 0.0]], device=self.device
-        ).expand(self.num_envs, -1)
+        ee_pos_b, ee_quat_b = subtract_frame_transforms(base_pos, base_quat, ee_pos_w, ee_quat_w)
+        goal_quat_w = torch.tensor([[1., 0., 0., 0.]], device=self.device).expand(self.num_envs, -1)
         goal_pos_b, goal_quat_b = subtract_frame_transforms(
             base_pos, base_quat, self._goal_pos_w, goal_quat_w
         )
@@ -242,55 +161,36 @@ class G1GraspEnv(DirectRLEnv):
         g_pos = self._robot.data.joint_pos[:, self._grip_dof_idx].mean(dim=-1, keepdim=True)
         gripper_state = (
             (g_pos - self._grip_open[0]) / (self._grip_close[0] - self._grip_open[0] + 1e-6)
-        ).clamp(0.0, 1.0)
+        ).clamp(0., 1.)
 
         proprio = torch.cat(
             [ee_pos_b, ee_quat_b, goal_pos_b, goal_quat_b, gripper_state, self._prev_action],
             dim=-1,
-        )   # (B, 22)
-
-        obs = torch.cat([pc_robot, proprio], dim=-1)   # (B, 406)
+        )
+        obs = torch.cat([pc_robot, proprio], dim=-1)
         return {"policy": obs}
 
     def _synthesize_pointcloud(self) -> torch.Tensor:
         """
-        Synthesize object point cloud from ground-truth geometry + Gaussian noise.
-
-        Samples NUM_PC_POINTS from each active object's surface in object-local frame,
-        rotates to world frame, adds 3 mm noise, then transforms to robot-base frame.
-        Returns (B, NUM_PC_POINTS * 3).
-
-        To switch to a real depth camera at deployment, replace this method with:
-            pts_w = depth_to_pointcloud_world(depth, K, cam_pos_w, cam_quat_w)
-            # then sample + transform to robot frame as below
+        Per-env: randomly subsample NUM_PC_POINTS from the pre-loaded surface PC,
+        rotate to world frame using object orientation, add noise, transform to robot base frame.
         """
-        B = self.num_envs
-        N = NUM_PC_POINTS
+        B, N = self.num_envs, NUM_PC_POINTS
         device = self.device
 
         obj_pos_w  = self._active_obj_pos()   # (B, 3)
-        obj_quat_w = self._active_obj_quat()  # (B, 4) [w,x,y,z]
+        obj_quat_w = self._active_obj_quat()  # (B, 4)
 
-        # Sample in object-local frame per shape type
-        pc_local = torch.zeros(B, N, 3, device=device)
+        # Gather pre-loaded PC for each env's active shape, subsample to N
+        # self._obj_pcs: (NUM_SHAPES, _PC_PRE_N, 3)
+        shape_pcs = self._obj_pcs[self._env_shape]  # (B, 512, 3)
+        idx = torch.randint(0, _PC_PRE_N, (B, N), device=device)
+        pc_local = shape_pcs.gather(
+            1, idx.unsqueeze(-1).expand(-1, -1, 3)
+        )  # (B, N, 3)
 
-        box_mask = self._env_shape == SHAPE_BOX
-        if box_mask.any():
-            n = box_mask.sum().item()
-            pc_local[box_mask] = _sample_box_surface(n, N, *_BOX_HALF, device)
-
-        sph_mask = self._env_shape == SHAPE_SPHERE
-        if sph_mask.any():
-            n = sph_mask.sum().item()
-            pc_local[sph_mask] = _sample_sphere_surface(n, N, _SPH_RAD, device)
-
-        cyl_mask = self._env_shape == SHAPE_CYLINDER
-        if cyl_mask.any():
-            n = cyl_mask.sum().item()
-            pc_local[cyl_mask] = _sample_cylinder_surface(n, N, _CYL_RAD, _CYL_H, device)
-
-        # Rotate local → world using object orientation
-        q_rep = obj_quat_w.unsqueeze(1).expand(-1, N, -1).reshape(B * N, 4)
+        # Rotate local → world
+        q_rep    = obj_quat_w.unsqueeze(1).expand(-1, N, -1).reshape(B * N, 4)
         pc_world = quat_rotate(q_rep, pc_local.reshape(B * N, 3)).reshape(B, N, 3)
         pc_world = pc_world + obj_pos_w.unsqueeze(1)
 
@@ -298,22 +198,22 @@ class G1GraspEnv(DirectRLEnv):
         pc_world = pc_world + torch.randn_like(pc_world) * _PC_NOISE
 
         # Transform to robot-base frame
-        base_pos      = self._robot.data.root_pos_w       # (B, 3)
-        base_quat     = self._robot.data.root_quat_w      # (B, 4)
-        base_quat_inv = quat_conjugate(base_quat)         # (B, 4)
+        base_pos      = self._robot.data.root_pos_w
+        base_quat     = self._robot.data.root_quat_w
+        base_quat_inv = quat_conjugate(base_quat)
 
-        rel   = pc_world - base_pos.unsqueeze(1)          # (B, N, 3)
-        q_inv = base_quat_inv.unsqueeze(1).expand(-1, N, -1).reshape(B * N, 4)
+        rel    = pc_world - base_pos.unsqueeze(1)
+        q_inv  = base_quat_inv.unsqueeze(1).expand(-1, N, -1).reshape(B * N, 4)
         pc_rob = quat_rotate(q_inv, rel.reshape(B * N, 3)).reshape(B, N, 3)
 
-        return pc_rob.reshape(B, -1)   # (B, N*3)
+        return pc_rob.reshape(B, -1)
 
     # ── Reward ────────────────────────────────────────────────────────────────
     def _get_rewards(self) -> torch.Tensor:
         obj_pos = self._active_obj_pos()
         ee_pos  = self._robot.data.body_pos_w[:, self._ee_body_idx]
 
-        dist_ee_obj   = torch.norm(ee_pos  - obj_pos, dim=-1)
+        dist_ee_obj   = torch.norm(ee_pos - obj_pos, dim=-1)
         lift_h        = (obj_pos[:, 2] - self.cfg.table_surface_z).clamp(0)
         dist_obj_goal = torch.norm(obj_pos[:, :2] - self._goal_pos_w[:, :2], dim=-1)
 
@@ -321,20 +221,14 @@ class G1GraspEnv(DirectRLEnv):
         fell    = obj_pos[:, 2] < (self.cfg.table_surface_z - 0.10)
         lifted  = lift_h > 0.05
 
-        reward = (
-            # Phase 0 — always active: clear gradient signal to move EE toward object
+        return (
             - dist_ee_obj * self.cfg.approach_reward_scale
-            # Phase 1 — lift
-            + lift_h * self.cfg.lift_reward_scale
-            # Phase 2 — place penalty only once object is off the table.
-            # Applying it before lift gives a constant negative signal that kills
-            # the advantage gradient and prevents any policy learning.
+            + lift_h      * self.cfg.lift_reward_scale
             - dist_obj_goal * self.cfg.place_reward_scale * lifted.float()
             + success.float() * self.cfg.success_bonus
             + fell.float()    * self.cfg.fall_penalty
             - self._prev_action.pow(2).sum(-1) * self.cfg.action_penalty_scale
         )
-        return reward
 
     # ── Termination ───────────────────────────────────────────────────────────
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
@@ -356,7 +250,7 @@ class G1GraspEnv(DirectRLEnv):
 
         ids     = torch.as_tensor(env_ids, device=self.device, dtype=torch.long)
         n       = ids.numel()
-        origins = self.scene.env_origins[ids]   # (n, 3)
+        origins = self.scene.env_origins[ids]
 
         # Robot reset
         def_pos = self._robot.data.default_joint_pos[ids]
@@ -365,7 +259,10 @@ class G1GraspEnv(DirectRLEnv):
         self._robot.set_joint_position_target(def_pos, env_ids=ids)
         self._joint_targets[ids] = def_pos
 
-        # Randomise spawn A and goal B
+        # Randomly assign one shape per resetting env
+        self._env_shape[ids] = torch.randint(0, NUM_SHAPES, (n,), device=self.device)
+
+        # Randomise spawn position and goal
         def rnd(lo, hi, count):
             return torch.rand(count, device=self.device) * (hi - lo) + lo
 
@@ -384,49 +281,46 @@ class G1GraspEnv(DirectRLEnv):
             torch.full((n,), self.cfg.table_surface_z + 0.08, device=self.device),
         ], dim=-1)
 
-        ident_quat = torch.tensor([[1.0, 0, 0, 0]], device=self.device).expand(n, -1)
+        ident_quat = torch.tensor([[1., 0., 0., 0.]], device=self.device).expand(n, -1)
         zero_vel   = torch.zeros(n, 6, device=self.device)
-        hide_pos   = torch.zeros(n, 3, device=self.device)
-        hide_pos[:, 2] = -20.0
 
-        for shape_idx, obj in enumerate([self._obj_box, self._obj_sphere, self._obj_cylinder]):
-            active = ids[self._env_shape[ids] == shape_idx]
-            hidden = ids[self._env_shape[ids] != shape_idx]
+        for shape_idx, obj in enumerate(self._objs):
+            active_mask = self._env_shape[ids] == shape_idx
+            active_ids  = ids[active_mask]
+            hidden_ids  = ids[~active_mask]
 
-            if active.numel() > 0:
-                mask = self._env_shape[ids] == shape_idx
-                pos  = obj_spawn_w[mask]
+            if active_ids.numel() > 0:
+                na = active_ids.numel()
+                pos = obj_spawn_w[active_mask]
                 obj.write_root_pose_to_sim(
-                    torch.cat([pos, ident_quat[:active.numel()]], dim=-1), env_ids=active
+                    torch.cat([pos, ident_quat[:na]], dim=-1), env_ids=active_ids
                 )
-                obj.write_root_velocity_to_sim(zero_vel[:active.numel()], env_ids=active)
+                obj.write_root_velocity_to_sim(zero_vel[:na], env_ids=active_ids)
 
-            if hidden.numel() > 0:
-                mask  = self._env_shape[ids] != shape_idx
-                h_pos = (hide_pos[mask] + origins[mask]).clone()
+            if hidden_ids.numel() > 0:
+                nh = hidden_ids.numel()
+                h_pos = origins[~active_mask].clone()
                 h_pos[:, 2] = -20.0
                 obj.write_root_pose_to_sim(
-                    torch.cat([h_pos, ident_quat[:hidden.numel()]], dim=-1), env_ids=hidden
+                    torch.cat([h_pos, ident_quat[:nh]], dim=-1), env_ids=hidden_ids
                 )
-                obj.write_root_velocity_to_sim(zero_vel[:hidden.numel()], env_ids=hidden)
+                obj.write_root_velocity_to_sim(zero_vel[:nh], env_ids=hidden_ids)
 
         self._prev_action[ids] = 0.0
 
     # ── Helpers ───────────────────────────────────────────────────────────────
     def _active_obj_pos(self) -> torch.Tensor:
-        """World position of each env's active object. (B, 3)"""
         pos = torch.zeros(self.num_envs, 3, device=self.device)
-        for shape_idx, obj in enumerate([self._obj_box, self._obj_sphere, self._obj_cylinder]):
+        for shape_idx, obj in enumerate(self._objs):
             mask = self._env_shape == shape_idx
             if mask.any():
                 pos[mask] = obj.data.root_pos_w[mask]
         return pos
 
     def _active_obj_quat(self) -> torch.Tensor:
-        """World quaternion [w,x,y,z] of each env's active object. (B, 4)"""
         quat = torch.zeros(self.num_envs, 4, device=self.device)
-        quat[:, 0] = 1.0   # identity default
-        for shape_idx, obj in enumerate([self._obj_box, self._obj_sphere, self._obj_cylinder]):
+        quat[:, 0] = 1.0
+        for shape_idx, obj in enumerate(self._objs):
             mask = self._env_shape == shape_idx
             if mask.any():
                 quat[mask] = obj.data.root_quat_w[mask]

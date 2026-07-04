@@ -191,7 +191,7 @@ def make_c_shape(rng) -> trimesh.Trimesh:
         cutter.apply_transform(rot)
         cutter.apply_translation([0, (R + r) * 0.5, 0])
         try:
-            mesh = trimesh.boolean.difference(full, cutter)
+            mesh = trimesh.boolean.difference([full, cutter])
         except Exception:
             continue
         # Scale to fit
@@ -210,7 +210,7 @@ def make_dumbbell(rng) -> trimesh.Trimesh:
         r1 = _rnd(0.012, 0.030, rng)
         r2 = _rnd(0.012, 0.030, rng)
         shaft_r = _rnd(0.005, min(r1, r2) * 0.7, rng)
-        shaft_h = _rnd(0.030, MAX_DIM - r1 - r2, rng)
+        shaft_h = _rnd(0.020, max(0.021, MAX_DIM - 2 * (r1 + r2)), rng)
 
         s1 = creation.icosphere(radius=r1)
         s2 = creation.icosphere(radius=r2)
@@ -294,7 +294,7 @@ def make_bracket(rng) -> trimesh.Trimesh:
         iz = oz * 1.5   # taller than outer to punch through
         inner = creation.box([ix, iy, iz])
         try:
-            mesh = trimesh.boolean.difference(outer, inner)
+            mesh = trimesh.boolean.difference([outer, inner])
         except Exception:
             continue
         if _validate(mesh):

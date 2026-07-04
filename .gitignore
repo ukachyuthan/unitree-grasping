@@ -38,7 +38,10 @@ env/
 
 # Logs and data
 data/logs/*
+data/grasp_logs/*
 data/checkpoints/*
+data/objects/*
+data/viz/*
 *.log
 runs/
 tensorboard_logs/
