@@ -23,7 +23,7 @@ from isaaclab.envs import DirectRLEnv
 from isaaclab.utils.math import quat_rotate, quat_conjugate, subtract_frame_transforms
 import isaaclab.sim as sim_utils
 
-from grasping.g1_grasp_env_cfg import G1GraspEnvCfg, NUM_PC_POINTS
+from envs.g1_grasp_env_cfg import G1GraspEnvCfg, NUM_PC_POINTS
 
 # ── Shape index ↔ cfg attribute name ↔ PC file ──────────────────────────────
 # Order must match the RigidObjectCfg field names in G1GraspEnvCfg.

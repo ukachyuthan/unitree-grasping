@@ -81,7 +81,15 @@ class GraspDataset(Dataset):
         centers = np.array([g["center"] for g in grasps], dtype=np.float32)
 
         if len(centers) == 0:
-            centers = np.zeros((1, 3), dtype=np.float32)
+            # No antipodal grasps found — fall back to point-cloud centroid.
+            centers = pc.mean(axis=0, keepdims=True)
+
+        # Pad/truncate to fixed n_grasp so DataLoader can batch consistently.
+        if len(centers) < self.n_grasp:
+            pad = np.repeat(centers[-1:], self.n_grasp - len(centers), axis=0)
+            centers = np.vstack([centers, pad])
+        else:
+            centers = centers[:self.n_grasp]
 
         # Augmentation: random rotation around vertical axis (Z)
         if self.augment:
@@ -92,7 +100,10 @@ class GraspDataset(Dataset):
             pc      = (R @ pc.T).T
             centers = (R @ centers.T).T
 
-        return torch.from_numpy(pc), torch.from_numpy(centers)
+        return (
+            torch.from_numpy(np.ascontiguousarray(pc)),
+            torch.from_numpy(np.ascontiguousarray(centers)),
+        )
 
 
 # ── Min-distance loss ─────────────────────────────────────────────────────────

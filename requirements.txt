@@ -11,6 +11,8 @@ scipy>=1.10.0
 
 # ── Point cloud / mesh tools ──────────────────────────────────────────────────
 trimesh>=4.0.0          # procedural mesh generation (generate_objects.py)
+manifold3d>=2.5.0       # CSG boolean ops (union/difference) in trimesh
+shapely>=2.0.0          # 2-D polygons for extrusion (wedge, star, etc.)
 open3d>=0.17.0          # optional: visualise point clouds during eval
 
 # ── Utilities ─────────────────────────────────────────────────────────────────

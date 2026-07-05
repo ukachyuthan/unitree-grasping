@@ -23,7 +23,8 @@ import torch
 from isaaclab.envs import DirectRLEnv
 from isaaclab.assets import Articulation, RigidObject
 
-from grasping.grasp_pose_env_cfg import (
+from envs._paths import data_path
+from envs.grasp_pose_env_cfg import (
     GraspPoseEnvCfg,
     N_APPROACH, N_CLOSE, N_LIFT, N_HOLD, EXEC_STEPS,
     NUM_PC_POINTS,
@@ -57,9 +58,9 @@ class GraspPoseEnv(DirectRLEnv):
         # ── Pre-load object point clouds ──────────────────────────────────────
         pcs = []
         for name in _SHAPE_NAMES:
-            p = os.path.abspath(f"data/objects/train/{name}/000_pc.npy")
-            if os.path.exists(p):
-                arr = np.load(p)  # (512, 3)
+            p = data_path("data/objects/train", name, "000_pc.npy")
+            if p.exists():
+                arr = np.load(str(p))  # (512, 3)
             else:
                 arr = np.zeros((_PC_PRE_N, 3), dtype=np.float32)
                 print(f"[GraspPoseEnv] WARNING: missing PC for {name}, using zeros")

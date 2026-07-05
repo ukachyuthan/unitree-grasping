@@ -52,7 +52,7 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
     sim: SimulationCfg = SimulationCfg(
         dt=1 / 60.0,
         render_interval=decimation,
-        device="cpu",
+        device="cuda:0",
         physics_material=sim_utils.RigidBodyMaterialCfg(
             friction_combine_mode="multiply",
             restitution_combine_mode="multiply",
@@ -157,8 +157,8 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
 
     # ── Objects (same 12 shape families as before) ────────────────────────────
     def _usd_obj(name: str, color: tuple) -> RigidObjectCfg:
-        import os
-        usd_path = os.path.abspath(f"data/objects/train/{name}/000.usd")
+        from envs._paths import data_path
+        usd_path = str(data_path("data/objects/train", name, "000.usd"))
         return RigidObjectCfg(
             prim_path=f"/World/envs/env_.*/{name.title().replace('_','')}",
             init_state=RigidObjectCfg.InitialStateCfg(pos=(0.5, 0.0, -20.0)),

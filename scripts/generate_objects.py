@@ -94,25 +94,48 @@ def make_superquadric(rng) -> trimesh.Trimesh:
         e1 = _rnd(0.08, 1.80, rng)
         e2 = _rnd(0.08, 1.80, rng)
 
-        n_th, n_ph = 32, 24
+        n_th, n_ph = 32, 16
         theta = np.linspace(-np.pi, np.pi, n_th, endpoint=False)
-        phi   = np.linspace(-np.pi / 2, np.pi / 2, n_ph)
-        TH, PH = np.meshgrid(theta, phi)
+        # Exclude exact poles — they collapse to a single point and break watertightness.
+        phi = np.linspace(-np.pi / 2, np.pi / 2, n_ph + 2)[1:-1]
 
-        X = a1 * _fexp(np.cos(PH), e1) * _fexp(np.cos(TH), e2)
-        Y = a2 * _fexp(np.cos(PH), e1) * _fexp(np.sin(TH), e2)
-        Z = a3 * _fexp(np.sin(PH), e1)
-        verts = np.stack([X.ravel(), Y.ravel(), Z.ravel()], -1)
+        ring_verts = []
+        for ph in phi:
+            cp, sp = np.cos(ph), np.sin(ph)
+            z = a3 * _fexp(sp, e1)
+            for th in theta:
+                ct, st = np.cos(th), np.sin(th)
+                x = a1 * _fexp(cp, e1) * _fexp(ct, e2)
+                y = a2 * _fexp(cp, e1) * _fexp(st, e2)
+                ring_verts.append([x, y, z])
+        ring_verts = np.asarray(ring_verts, dtype=np.float64)
 
-        nR, nC = PH.shape
+        south = np.array([0.0, 0.0, -a3], dtype=np.float64)
+        north = np.array([0.0, 0.0,  a3], dtype=np.float64)
+        verts = np.vstack([south, ring_verts, north])
+
         faces = []
-        for r in range(nR - 1):
-            for c in range(nC):
-                c1 = (c + 1) % nC
-                v0, v1 = r * nC + c, r * nC + c1
-                v2, v3 = (r+1)*nC + c, (r+1)*nC + c1
+        # South cap: pole (0) → first ring
+        for c in range(n_th):
+            c1 = (c + 1) % n_th
+            faces.append([0, 1 + c1, 1 + c])
+        # Body quads between rings
+        for r in range(n_ph - 1):
+            for c in range(n_th):
+                c1 = (c + 1) % n_th
+                v0 = 1 + r * n_th + c
+                v1 = 1 + r * n_th + c1
+                v2 = 1 + (r + 1) * n_th + c
+                v3 = 1 + (r + 1) * n_th + c1
                 faces += [[v0, v2, v1], [v1, v2, v3]]
-        mesh = trimesh.Trimesh(np.array(verts), np.array(faces), process=True)
+        # North cap: last ring → pole
+        north_idx = len(verts) - 1
+        base = 1 + (n_ph - 1) * n_th
+        for c in range(n_th):
+            c1 = (c + 1) % n_th
+            faces.append([north_idx, base + c, base + c1])
+
+        mesh = trimesh.Trimesh(verts, np.asarray(faces), process=True)
         if _validate(mesh):
             return _center(mesh)
     return None
@@ -229,13 +252,15 @@ def make_dumbbell(rng) -> trimesh.Trimesh:
 # 7. Wedge / triangular prism
 # ─────────────────────────────────────────────────────────────────────────────
 def make_wedge(rng) -> trimesh.Trimesh:
+    from shapely.geometry import Polygon as ShapelyPolygon
+
     for _ in range(20):
         base  = _rnd(MIN_DIM, MAX_DIM * 0.8, rng)
         depth = _rnd(MIN_DIM, MAX_DIM * 0.8, rng)
         h     = _rnd(MIN_DIM, MAX_DIM * 0.8, rng)
         # Right-triangle cross-section, extruded along Y
         verts_2d = np.array([[0, 0], [base, 0], [0, h]])
-        poly = trimesh.path.polygons.Polygon(verts_2d)
+        poly = ShapelyPolygon(verts_2d)
         mesh = creation.extrude_polygon(poly, depth)
         if _validate(mesh):
             return _center(mesh)

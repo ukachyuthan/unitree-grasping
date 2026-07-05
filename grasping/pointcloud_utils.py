@@ -14,7 +14,16 @@ Portability checklist for a new camera / robot pair:
 from __future__ import annotations
 
 import torch
-from isaaclab.utils.math import quat_rotate
+
+
+def quat_rotate(q: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
+    """Rotate vectors *v* by unit quaternion *q* (w, x, y, z)."""
+    q_w = q[..., 0:1]
+    q_vec = q[..., 1:4]
+    a = v * (2.0 * q_w ** 2 - 1.0)
+    b = torch.cross(q_vec, v, dim=-1) * q_w * 2.0
+    c = q_vec * torch.sum(q_vec * v, dim=-1, keepdim=True) * 2.0
+    return a + b + c
 
 
 def depth_to_pointcloud_world(
