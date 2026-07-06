@@ -88,11 +88,11 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
             pos=(0.0, 0.0, 0.74),
             joint_pos={
                 # Pre-positioned over workspace (MuJoCo IK to x=0.30, z=0.90)
-                # EE starts at ~(0.30, 0.00, 0.90), 5.8cm from spawn centre
+                # EE starts at ~(0.30, 0.00, 0.90); objects spawn at same x/y
                 "left_shoulder_pitch_joint": -0.7840,
                 "left_shoulder_roll_joint":  -0.2726,
                 "left_shoulder_yaw_joint":   -0.0893,
-                "left_elbow_pitch_joint":     0.7579,
+                "left_elbow_pitch_joint":     1.05,
                 "left_elbow_roll_joint":      0.00,
                 "left_one_joint":             1.00,
                 "left_two_joint":             0.52,
@@ -117,7 +117,7 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
                     "left_shoulder_yaw_joint",   "left_elbow_pitch_joint",
                     "left_elbow_roll_joint",
                 ],
-                effort_limit_sim=100.0, velocity_limit_sim=10.0, stiffness=80.0, damping=8.0,
+                effort_limit_sim=100.0, velocity_limit_sim=10.0, stiffness=200.0, damping=15.0,
             ),
             "left_gripper": ImplicitActuatorCfg(
                 joint_names_expr=["left_one_joint", "left_two_joint"],
@@ -146,9 +146,10 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
     )
 
     # ── Table ─────────────────────────────────────────────────────────────────
+    # Shifted toward the robot so the near edge starts ~2 cm in front of the base.
     table: RigidObjectCfg = RigidObjectCfg(
         prim_path="/World/envs/env_.*/Table",
-        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.5, 0.0, 0.4)),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.42, 0.0, 0.4)),
         spawn=sim_utils.CuboidCfg(
             size=(0.80, 0.60, 0.80),
             rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
@@ -197,16 +198,20 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
     grasp_z_bounds: tuple = (-0.07, 0.07)
 
     # ── Task geometry ─────────────────────────────────────────────────────────
-    # Objects spawn on near edge of table (x=0.22-0.32 at robot-base frame).
-    # Table center is at x=0.50 with 0.80m half-width, so near edge at x=0.10.
-    # The G1 left arm can reach x≤0.33 at table height; keep objects within that.
+    # Fixed spawn under pre-positioned EE home ≈ (0.30, 0.00) robot-base.
     table_surface_z: float = 0.80
-    spawn_x_range: tuple   = (0.22, 0.32)
-    spawn_y_range: tuple   = (-0.08, 0.08)
+    spawn_x_range: tuple   = (0.30, 0.30)
+    spawn_y_range: tuple   = (0.00, 0.00)
+    spawn_z_offset: float  = 0.045   # object centre ≈ EE height (~0.845 world)
+    settle_steps: int      = 0       # arm-over-table settle pushes objects; anchor at spawn
 
     # ── Reward ────────────────────────────────────────────────────────────────
     lift_target_m: float    = 0.12    # full reward when lifted 12 cm
     lift_threshold_m: float = 0.03    # binary success if lifted > 3 cm
+    lift_reward_weight: float = 0.75  # fraction of total reward from lift
+    leg_stillness_weight: float = 0.25  # fraction from keeping legs at home
+    leg_dev_scale: float = 0.12       # RMS joint deviation (rad) for zero leg bonus
+    leg_vel_scale: float = 0.50       # RMS joint velocity (rad/s) for zero leg bonus
 
     # ── Joint names (G1-specific) ─────────────────────────────────────────────
     left_arm_joint_names: list = [
@@ -215,7 +220,14 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
         "left_elbow_roll_joint",
     ]
     left_gripper_joint_names: list = ["left_one_joint", "left_two_joint"]
+    leg_joint_names: list = [
+        "left_hip_yaw_joint", "left_hip_roll_joint", "left_hip_pitch_joint",
+        "left_knee_joint", "left_ankle_pitch_joint", "left_ankle_roll_joint",
+        "right_hip_yaw_joint", "right_hip_roll_joint", "right_hip_pitch_joint",
+        "right_knee_joint", "right_ankle_pitch_joint", "right_ankle_roll_joint",
+        "torso_joint",
+    ]
     ee_body_name: str = "left_palm_link"
 
     # IK step size — needs to be large enough to traverse ~60cm from home pose
-    ik_alpha: float = 0.20   # joint step size per physics step during approach
+    ik_alpha: float = 0.6    # joint step size per physics step during approach

@@ -22,7 +22,10 @@ import sys
 from isaaclab.app import AppLauncher
 
 parser = argparse.ArgumentParser(description="Play grasp-pose RL policy")
-parser.add_argument("--checkpoint", type=str, required=True)
+parser.add_argument("--checkpoint", type=str, default=None,
+                    help="Trained .pt (omit with --debug_action)")
+parser.add_argument("--debug_action", type=str, choices=["zero", "random"], default=None,
+                    help="Skip checkpoint; use fixed action for IK/exec debug")
 parser.add_argument("--num_envs", type=int, default=1)
 parser.add_argument("--num_episodes", type=int, default=20,
                     help="Episodes to evaluate (stats printed)")
@@ -121,9 +124,8 @@ def write_mp4(frames: list, path: str, fps: int = 30):
 
 def main():
     device = args.device
-    ckpt = os.path.abspath(args.checkpoint)
-    if not os.path.isfile(ckpt):
-        print(f"[play] checkpoint not found: {ckpt}")
+    if not args.debug_action and not args.checkpoint:
+        print("[play] provide --checkpoint or --debug_action zero|random")
         sys.exit(1)
 
     render_mode = "rgb_array" if args.video else None
@@ -137,19 +139,32 @@ def main():
     if args.seed is not None:
         env.seed(args.seed)
 
-    policy = load_policy(ckpt, device)
-    print(f"[play] loaded {ckpt}")
+    policy = None
+    if args.debug_action:
+        print(f"[play] debug mode: action={args.debug_action} (no checkpoint)")
+    else:
+        ckpt = os.path.abspath(args.checkpoint)
+        if not os.path.isfile(ckpt):
+            print(f"[play] checkpoint not found: {ckpt}")
+            sys.exit(1)
+        policy = load_policy(ckpt, device)
+        print(f"[play] loaded {ckpt}")
+
     print(f"[play] device={device}  envs={args.num_envs}  episodes={args.num_episodes}")
 
     obs_dict, _ = env.reset()
     successes, total_reward = 0, 0.0
     video_frames: list = []
-    threshold = env_cfg.lift_threshold_m / env_cfg.lift_target_m
 
     for ep in range(1, args.num_episodes + 1):
-        obs = _obs_tensor(obs_dict, device)
-        with torch.no_grad():
-            action = policy.act_inference(obs)
+        if args.debug_action == "zero":
+            action = torch.zeros(args.num_envs, NUM_ACTIONS, device=device)
+        elif args.debug_action == "random":
+            action = torch.empty(args.num_envs, NUM_ACTIONS, device=device).uniform_(-1, 1)
+        else:
+            obs = _obs_tensor(obs_dict, device)
+            with torch.no_grad():
+                action = policy.act_inference(obs)
 
         if args.video and ep <= args.video_episodes:
             frames, rew = rollout_dense_frames(env, action)
@@ -160,14 +175,14 @@ def main():
 
         r = rew.mean().item()
         total_reward += r
-        if r >= threshold:
+        if r >= 0.5:
             successes += 1
-        print(f"  ep {ep:3d}/{args.num_episodes}  reward={r:.3f}  "
-              f"lift_ok={r >= threshold}")
+        print(f"  ep {ep:3d}/{args.num_episodes}  reward={r:.0f}  "
+              f"lift_ok={r >= 0.5}  action={action[0].cpu().numpy().round(2)}")
 
     n = args.num_episodes
     print(f"\n[play] mean_reward={total_reward/n:.3f}  "
-          f"success_rate={100*successes/n:.1f}%  (reward ≥ {threshold:.2f})")
+          f"success_rate={100*successes/n:.1f}%  (binary: 1=lifted ≥3cm)")
 
     if args.video and video_frames:
         write_mp4(video_frames, os.path.abspath(args.out))

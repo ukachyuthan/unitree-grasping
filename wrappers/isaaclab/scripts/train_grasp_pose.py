@@ -49,7 +49,10 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+import json
+
 import torch
+from torch.utils.tensorboard import SummaryWriter
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from bootstrap import bootstrap
@@ -84,12 +87,13 @@ def ppo_update(ac, optimizer, obs, actions, old_logp, returns, advantages,
 
     optimizer.zero_grad()
     loss.backward()
-    torch.nn.utils.clip_grad_norm_(ac.parameters(), max_grad_norm)
+    grad_norm = torch.nn.utils.clip_grad_norm_(ac.parameters(), max_grad_norm)
     optimizer.step()
-    return policy_loss.item(), value_loss.item(), entropy.item()
+    return policy_loss.item(), value_loss.item(), entropy.item(), loss.item(), grad_norm.item()
 
 
-def train_ppo(env, ac, device, log_dir, max_iters, lr=3e-4,
+def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=None,
+              success_threshold=0.25, lr=3e-4,
               num_steps_per_env=16, num_epochs=5, num_mini_batches=4,
               clip_param=0.2, value_coef=1.0, entropy_coef=0.02,
               max_grad_norm=1.0, save_interval=100):
@@ -129,11 +133,14 @@ def train_ppo(env, ac, device, log_dir, max_iters, lr=3e-4,
         advantages = (returns - val_all).detach()
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
+        last_policy_loss = last_value_loss = last_entropy = 0.0
+        last_total_loss = last_grad_norm = 0.0
         for _ in range(num_epochs):
             perm = torch.randperm(batch_size, device=device)
             for start in range(0, batch_size, mini_batch_size):
                 idx = perm[start : start + mini_batch_size]
-                ppo_update(
+                (last_policy_loss, last_value_loss, last_entropy,
+                 last_total_loss, last_grad_norm) = ppo_update(
                     ac, optimizer,
                     obs_all[idx], act_all[idx], logp_all[idx],
                     returns[idx], advantages[idx],
@@ -141,8 +148,73 @@ def train_ppo(env, ac, device, log_dir, max_iters, lr=3e-4,
                 )
 
         mean_rew = rew_all.mean().item()
+        std_rew = rew_all.std(unbiased=False).item()
+        min_rew = rew_all.min().item()
+        max_rew = rew_all.max().item()
+        success_rate = (rew_all >= success_threshold).float().mean().item()
+        mean_value = val_all.mean().item()
+        mean_return = returns.mean().item()
+        mean_adv = advantages.mean().item()
+        action_abs = act_all.abs().mean().item()
+
+        u = env.unwrapped
+        mean_lift = u._last_lift_reward.mean().item() if hasattr(u, "_last_lift_reward") else float("nan")
+        mean_leg_still = u._last_leg_still.mean().item() if hasattr(u, "_last_leg_still") else float("nan")
+
+        stats = {
+            "iter": it,
+            "mean_reward": mean_rew,
+            "std_reward": std_rew,
+            "min_reward": min_rew,
+            "max_reward": max_rew,
+            "success_rate": success_rate,
+            "mean_lift_reward": mean_lift,
+            "mean_leg_still": mean_leg_still,
+            "mean_value": mean_value,
+            "mean_return": mean_return,
+            "mean_advantage": mean_adv,
+            "action_abs_mean": action_abs,
+            "policy_loss": last_policy_loss,
+            "value_loss": last_value_loss,
+            "entropy": last_entropy,
+            "total_loss": last_total_loss,
+            "grad_norm": last_grad_norm,
+        }
+
+        if metrics_path is not None:
+            with open(metrics_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(stats) + "\n")
+
         if it == 1 or it % 10 == 0:
-            print(f"  iter {it:5d}/{max_iters}  mean_reward={mean_rew:.4f}")
+            print(
+                f"  iter {it:5d}/{max_iters}  "
+                f"reward={mean_rew:.4f}±{std_rew:.4f}  "
+                f"lift={mean_lift:.4f}  leg={mean_leg_still:.4f}  "
+                f"success={success_rate*100:.1f}%  "
+                f"v_loss={last_value_loss:.4f}  "
+                f"pi_loss={last_policy_loss:.4f}  "
+                f"entropy={last_entropy:.3f}  "
+                f"grad={last_grad_norm:.2f}"
+            )
+
+        if writer is not None:
+            writer.add_scalar("train/mean_reward", mean_rew, it)
+            writer.add_scalar("train/std_reward", std_rew, it)
+            writer.add_scalar("train/min_reward", min_rew, it)
+            writer.add_scalar("train/max_reward", max_rew, it)
+            writer.add_scalar("train/success_rate", success_rate, it)
+            writer.add_scalar("train/mean_lift_reward", mean_lift, it)
+            writer.add_scalar("train/mean_leg_still", mean_leg_still, it)
+            writer.add_scalar("train/mean_value", mean_value, it)
+            writer.add_scalar("train/mean_return", mean_return, it)
+            writer.add_scalar("train/mean_advantage", mean_adv, it)
+            writer.add_scalar("train/action_abs_mean", action_abs, it)
+            writer.add_scalar("train/policy_loss", last_policy_loss, it)
+            writer.add_scalar("train/value_loss", last_value_loss, it)
+            writer.add_scalar("train/entropy", last_entropy, it)
+            writer.add_scalar("train/total_loss", last_total_loss, it)
+            writer.add_scalar("train/grad_norm", last_grad_norm, it)
+            writer.flush()
 
         if it % save_interval == 0:
             ckpt = os.path.join(log_dir, f"grasp_pose_{it}.pt")
@@ -190,7 +262,20 @@ def main():
     n_params = sum(p.numel() for p in ac.parameters())
     print(f"[grasp-pose-train] GraspPoseActorCritic ({n_params:,} params)")
 
-    train_ppo(env, ac, device, log_dir, max_iters=args.max_iters)
+    tb_dir = os.path.join(log_dir, "tb")
+    writer = SummaryWriter(log_dir=tb_dir)
+    metrics_path = os.path.join(log_dir, "metrics.jsonl")
+    print(f"[grasp-pose-train] tensorboard → {tb_dir}")
+    print(f"[grasp-pose-train] metrics log  → {metrics_path}")
+
+    train_ppo(
+        env, ac, device, log_dir,
+        max_iters=args.max_iters,
+        writer=writer,
+        metrics_path=metrics_path,
+    )
+
+    writer.close()
 
     final_path = os.path.join(log_dir, "grasp_pose_final.pt")
     torch.save({"model": ac.state_dict(), "iteration": args.max_iters}, final_path)

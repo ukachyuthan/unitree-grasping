@@ -61,11 +61,7 @@ def run_episode(env: GraspPoseEnv, action: torch.Tensor):
         ee_w   = env._robot.data.body_pos_w[:, env._ee_body_idx, :3].detach().cpu()
         obj_w  = env._get_active_obj_pos().detach().cpu()
 
-        obj_w_cur   = env._get_active_obj_pos().detach().cpu()
-        root_w_cur  = env._robot.data.root_pos_w[:, :3].detach().cpu()
-        obj_base    = obj_w_cur - root_w_cur
-        tgt_base    = obj_base + env._grasp_target.detach().cpu()
-        tgt_world   = root_w_cur + tgt_base
+        tgt_world   = env._obj_anchor[:, :3].detach().cpu() + env._grasp_target.detach().cpu()
 
         ee_traj.append(ee_w[0].numpy())
         tgt_traj.append(tgt_world[0].numpy())
@@ -149,7 +145,7 @@ def plot_results(ee, tgt, obj, action_local, out_path):
     ax.grid(True, alpha=0.3)
 
     final_lift = (obj[-1, 2] - obj[0, 2]) * 100
-    final_dist = np.linalg.norm(ee[-1] - tgt[N_APPROACH - 1]) * 100
+    final_dist = np.linalg.norm(ee[N_APPROACH - 1] - tgt[N_APPROACH - 1]) * 100
     summary = (
         f"Grasp target (local): {action_local.numpy().round(3)}\n"
         f"Object spawn (world): {obj[0].round(3)}\n"
