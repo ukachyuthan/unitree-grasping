@@ -96,7 +96,7 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
               success_threshold=0.25, lr=3e-4,
               num_steps_per_env=16, num_epochs=5, num_mini_batches=4,
               clip_param=0.2, value_coef=1.0, entropy_coef=0.02,
-              max_grad_norm=1.0, save_interval=100):
+              max_grad_norm=1.0, save_interval=25):
     optimizer = torch.optim.Adam(ac.parameters(), lr=lr)
     num_envs = env.num_envs
     batch_size = num_envs * num_steps_per_env

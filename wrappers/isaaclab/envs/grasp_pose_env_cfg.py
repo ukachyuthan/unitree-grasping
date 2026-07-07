@@ -239,3 +239,6 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
 
     # IK step size — needs to be large enough to traverse ~60cm from home pose
     ik_alpha: float = 0.6    # joint step size per physics step during approach
+    # Recompute the (expensive) numeric Jacobian every N IK steps and reuse it in
+    # between — big speedup since each recompute costs ~6 sim.forward() calls.
+    ik_jacobian_interval: int = 4

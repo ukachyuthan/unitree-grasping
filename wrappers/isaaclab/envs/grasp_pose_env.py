@@ -85,6 +85,9 @@ class GraspPoseEnv(DirectRLEnv):
         self._grasp_pt_offset = torch.tensor(
             self.cfg.grasp_point_offset, device=self.device
         ).unsqueeze(0)
+        # Cached numeric Jacobian (recomputed every ik_jacobian_interval steps).
+        self._J_cache = None
+        self._ik_call = 0
         self._exec_step    = 0   # phase counter, reset in _pre_physics_step
         self._arm_q_des = self._home_joint_pos[:, self._arm_dof_idx].clone()
 
@@ -270,6 +273,8 @@ class GraspPoseEnv(DirectRLEnv):
         self._grasp_target = torch.stack([gx, gy, gz], dim=-1)  # (B, 3)
         self._grasp_locked[:] = False
         self._exec_step = 0
+        self._J_cache = None   # force Jacobian recompute at the start of each episode
+        self._ik_call = 0
 
     # ── Scripted execution (called each physics step within decimation) ────────
 
@@ -332,8 +337,12 @@ class GraspPoseEnv(DirectRLEnv):
         ee_w = self._robot.data.body_pos_w[:, self._ee_body_idx, :3]
         error = target_w - ee_w
 
-        J = self._numeric_jacobian_pos()
-        self._anchor_objects()
+        # Recompute the numeric Jacobian only every N steps; reuse it otherwise.
+        if self._J_cache is None or (self._ik_call % self.cfg.ik_jacobian_interval == 0):
+            self._J_cache = self._numeric_jacobian_pos()
+            self._anchor_objects()   # jacobian perturbs joint state; re-pin objects
+        self._ik_call += 1
+        J = self._J_cache
 
         lam = 0.05
         JJT = J @ J.transpose(-1, -2)
