@@ -81,6 +81,10 @@ class GraspPoseEnv(DirectRLEnv):
         # Palm world position captured at the start of the lift phase; the lift
         # target ramps up from here so it no longer chases the moving obj anchor.
         self._lift_base_w  = torch.zeros(B, 3, device=self.device)
+        # Offset from palm origin (wrist) to the finger grasp zone (world frame).
+        self._grasp_pt_offset = torch.tensor(
+            self.cfg.grasp_point_offset, device=self.device
+        ).unsqueeze(0)
         self._exec_step    = 0   # phase counter, reset in _pre_physics_step
         self._arm_q_des = self._home_joint_pos[:, self._arm_dof_idx].clone()
 
@@ -313,8 +317,13 @@ class GraspPoseEnv(DirectRLEnv):
         return J
 
     def _do_approach(self):
-        """Damped least-squares IK toward the object-relative grasp target."""
-        target_w = self._obj_anchor[:, :3] + self._grasp_target
+        """Damped least-squares IK; places the finger grasp zone at the target.
+
+        We subtract the palm->grasp-point offset so the palm origin (wrist) ends up
+        behind the object and the fingers reach it, instead of driving the wrist
+        onto the object.
+        """
+        target_w = self._obj_anchor[:, :3] + self._grasp_target - self._grasp_pt_offset
         self._ik_to(target_w)
 
     def _ik_to(self, target_w: torch.Tensor):
@@ -357,8 +366,15 @@ class GraspPoseEnv(DirectRLEnv):
         self._robot.set_joint_position_target(q_tgt, joint_ids=self._grip_dof_idx)
         if lock_at_end:
             ee_w = self._robot.data.body_pos_w[:, self._ee_body_idx, :3]
-            self._grasp_offset = self._obj_anchor[:, :3] - ee_w
-            self._grasp_locked[:] = True
+            obj_w = self._get_active_obj_pos()
+            # Proximity-gated grasp: only "grab" if the finger grasp point actually
+            # reached the object. A missed grasp leaves the object on the table (no
+            # free lift), so reward is honest and the policy must predict reachable
+            # grasps. The object is held relative to the palm (rides at the fingers).
+            grasp_pt = ee_w + self._grasp_pt_offset
+            reached = (obj_w - grasp_pt).norm(dim=-1) <= self.cfg.grasp_reach_thresh
+            self._grasp_offset = obj_w - ee_w
+            self._grasp_locked = reached
 
     def _do_lift(self):
         """Raise the palm along +z toward a fixed world target set at lift start.
@@ -415,11 +431,12 @@ class GraspPoseEnv(DirectRLEnv):
     # ── Rewards ───────────────────────────────────────────────────────────────
 
     def _get_rewards(self) -> torch.Tensor:
-        if self._grasp_locked.any():
-            ee_w = self._robot.data.body_pos_w[:, self._ee_body_idx, :3]
-            obj_z = (ee_w + self._grasp_offset)[:, 2]
-        else:
-            obj_z = self._get_active_obj_pos()[:, 2]
+        # Per-env object height: grasped envs follow the palm (weld proxy), missed
+        # grasps use the object's real height (it stays on the table).
+        ee_w = self._robot.data.body_pos_w[:, self._ee_body_idx, :3]
+        welded_z = (ee_w + self._grasp_offset)[:, 2]
+        actual_z = self._get_active_obj_pos()[:, 2]
+        obj_z = torch.where(self._grasp_locked, welded_z, actual_z)
         delta = (obj_z - self._spawn_z).clamp(min=0.0)
         lift_r = (delta / self.cfg.lift_target_m).clamp(max=1.0)
 

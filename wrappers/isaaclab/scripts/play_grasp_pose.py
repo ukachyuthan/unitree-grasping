@@ -37,6 +37,10 @@ parser.add_argument("--out", type=str, default="data/viz/grasp_pose_rollout.mp4"
 parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--num_pc_points", type=int, default=128)
 parser.add_argument("--pc_embed_dim", type=int, default=128)
+parser.add_argument("--cam_eye", type=float, nargs=3, default=[0.66, -0.5, 1.22],
+                    help="Video camera position (world x y z), near the object")
+parser.add_argument("--cam_target", type=float, nargs=3, default=[0.31, -0.02, 0.9],
+                    help="Video camera look-at point (world x y z) = object")
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 
@@ -138,6 +142,11 @@ def main():
     env = GraspPoseEnv(cfg=env_cfg, render_mode=render_mode)
     if args.seed is not None:
         env.seed(args.seed)
+
+    if args.video:
+        # Move the render camera close to the object for a near view.
+        env.unwrapped.sim.set_camera_view(eye=args.cam_eye, target=args.cam_target)
+        print(f"[play] camera eye={args.cam_eye} target={args.cam_target}")
 
     policy = None
     if args.debug_action:

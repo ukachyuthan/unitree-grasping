@@ -117,7 +117,7 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
                     "left_shoulder_yaw_joint",   "left_elbow_pitch_joint",
                     "left_elbow_roll_joint",
                 ],
-                effort_limit_sim=100.0, velocity_limit_sim=10.0, stiffness=200.0, damping=15.0,
+                effort_limit_sim=300.0, velocity_limit_sim=10.0, stiffness=800.0, damping=40.0,
             ),
             "left_gripper": ImplicitActuatorCfg(
                 joint_names_expr=["left_one_joint", "left_two_joint"],
@@ -207,6 +207,11 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
 
     # ── Lift execution ────────────────────────────────────────────────────────
     lift_height_m: float    = 0.15    # commanded palm rise over N_LIFT steps
+    grasp_reach_thresh: float = 0.06  # max grasp-point-to-object dist to count as grasped
+    # Offset (world x,y,z) from the palm-link origin (wrist) to the finger grasp
+    # zone. The arm positions this point at the object, so the object is held at
+    # the fingers instead of floating at the wrist.
+    grasp_point_offset: tuple = (0.06, -0.04, -0.02)
 
     # ── Reward ────────────────────────────────────────────────────────────────
     lift_target_m: float    = 0.12    # full reward when lifted 12 cm
