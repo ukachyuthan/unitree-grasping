@@ -78,6 +78,9 @@ class GraspPoseEnv(DirectRLEnv):
         self._grasp_offset = torch.zeros(B, 3, device=self.device)   # obj - ee at close
         self._last_lift_reward = torch.zeros(B, device=self.device)
         self._last_leg_still = torch.zeros(B, device=self.device)
+        # Palm world position captured at the start of the lift phase; the lift
+        # target ramps up from here so it no longer chases the moving obj anchor.
+        self._lift_base_w  = torch.zeros(B, 3, device=self.device)
         self._exec_step    = 0   # phase counter, reset in _pre_physics_step
         self._arm_q_des = self._home_joint_pos[:, self._arm_dof_idx].clone()
 
@@ -159,7 +162,13 @@ class GraspPoseEnv(DirectRLEnv):
             self._settle_physics()
 
     def _settle_physics(self, n_steps: int | None = None):
-        """Let spawned objects settle on the table before the policy acts."""
+        """Let spawned objects find their true resting height before the policy acts.
+
+        Vertical-only settle: each step we resolve physics (so a penetrating object
+        pops up to rest on the table), then pin the object's x/y/orientation back to
+        the spawn pose and zero its velocity. This finds the correct resting z
+        without letting the object roll/drift laterally away from the spawn point.
+        """
         n = self.cfg.settle_steps if n_steps is None else n_steps
         if n <= 0:
             return
@@ -172,9 +181,25 @@ class GraspPoseEnv(DirectRLEnv):
             self.scene.write_data_to_sim()
             self.sim.step(render=False)
             self.scene.update(dt=self.physics_dt)
+            self._constrain_settle_xy()
         # Re-record spawn height after settle so reward baseline is accurate.
         self._spawn_z[:] = self._get_active_obj_pos()[:, 2]
         self._cache_object_anchors()
+
+    def _constrain_settle_xy(self):
+        """Keep active objects at spawn x/y/orientation; let physics update z only."""
+        for i, obj in enumerate(self._objs):
+            mask = (self._env_shape == i)
+            if not mask.any():
+                continue
+            state = obj.data.root_state_w[mask].clone()
+            anchor = self._obj_anchor[mask]
+            state[:, 0] = anchor[:, 0]      # pin x
+            state[:, 1] = anchor[:, 1]      # pin y
+            state[:, 3:7] = anchor[:, 3:7]  # pin orientation
+            state[:, 7:] = 0.0              # zero velocity
+            env_ids = mask.nonzero(as_tuple=False).squeeze(-1)
+            obj.write_root_state_to_sim(state, env_ids=env_ids)
 
     def _cache_object_anchors(self):
         """Store settled root state of each env's active object."""
@@ -288,10 +313,14 @@ class GraspPoseEnv(DirectRLEnv):
         return J
 
     def _do_approach(self):
-        """Damped least-squares IK using a numeric palm Jacobian."""
+        """Damped least-squares IK toward the object-relative grasp target."""
+        target_w = self._obj_anchor[:, :3] + self._grasp_target
+        self._ik_to(target_w)
+
+    def _ik_to(self, target_w: torch.Tensor):
+        """Damped least-squares IK moving the palm toward an explicit world target."""
         self._anchor_objects()
         ee_w = self._robot.data.body_pos_w[:, self._ee_body_idx, :3]
-        target_w = self._obj_anchor[:, :3] + self._grasp_target
         error = target_w - ee_w
 
         J = self._numeric_jacobian_pos()
@@ -332,10 +361,23 @@ class GraspPoseEnv(DirectRLEnv):
             self._grasp_locked[:] = True
 
     def _do_lift(self):
-        """Lift EE straight up by shifting the local-frame z offset."""
-        delta_z = 0.15 / N_LIFT   # total 15 cm over N_LIFT steps
-        self._grasp_target[:, 2] += delta_z   # moves world-z up since +z=up
-        self._do_approach()
+        """Raise the palm along +z toward a fixed world target set at lift start.
+
+        The target is anchored to the palm position captured when the gripper
+        finished closing, then ramped up linearly over N_LIFT steps. It no longer
+        depends on the (moving) object anchor or the accumulating grasp target,
+        which previously double-counted and made the target accelerate past the
+        arm's reach (runaway feedback loop).
+        """
+        lift_start = N_APPROACH + N_CLOSE
+        if self._exec_step == lift_start:
+            self._lift_base_w = (
+                self._robot.data.body_pos_w[:, self._ee_body_idx, :3].clone()
+            )
+        k = (self._exec_step - lift_start) + 1   # 1 … N_LIFT
+        target_w = self._lift_base_w.clone()
+        target_w[:, 2] += self.cfg.lift_height_m * (k / N_LIFT)
+        self._ik_to(target_w)
 
     # ── Observations ──────────────────────────────────────────────────────────
 

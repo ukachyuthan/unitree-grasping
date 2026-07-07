@@ -203,7 +203,10 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
     spawn_x_range: tuple   = (0.30, 0.30)
     spawn_y_range: tuple   = (0.00, 0.00)
     spawn_z_offset: float  = 0.045   # object centre ≈ EE height (~0.845 world)
-    settle_steps: int      = 0       # arm-over-table settle pushes objects; anchor at spawn
+    settle_steps: int      = 30      # let object drop to true rest, then anchor there
+
+    # ── Lift execution ────────────────────────────────────────────────────────
+    lift_height_m: float    = 0.15    # commanded palm rise over N_LIFT steps
 
     # ── Reward ────────────────────────────────────────────────────────────────
     lift_target_m: float    = 0.12    # full reward when lifted 12 cm
