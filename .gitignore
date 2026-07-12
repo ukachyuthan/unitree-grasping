@@ -27,6 +27,8 @@ MANIFEST
 venv/
 ENV/
 env/
+rl_unitree/
+.venv/
 
 # IDE
 .vscode/

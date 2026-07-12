@@ -14,6 +14,7 @@ trimesh>=4.0.0          # procedural mesh generation (generate_objects.py)
 manifold3d>=2.5.0       # CSG boolean ops (union/difference) in trimesh
 shapely>=2.0.0          # 2-D polygons for extrusion (wedge, star, etc.)
 open3d>=0.17.0          # optional: visualise point clouds during eval
+imageio>=2.25.0        # for recording demo videos (ffmpeg required)
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
 pyyaml>=6.0
@@ -22,6 +23,9 @@ tensorboard>=2.13.0
 
 # ── Optional: GraspNet reward bootstrap ──────────────────────────────────────
 # contact-graspnet-pytorch  # install separately; see README for instructions
+
+# Lightweight physics for simplified gripper experiments
+pybullet>=3.2.0
 
 # ── Dev ───────────────────────────────────────────────────────────────────────
 black>=23.0.0
