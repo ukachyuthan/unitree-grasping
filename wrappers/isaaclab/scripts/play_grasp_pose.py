@@ -37,9 +37,9 @@ parser.add_argument("--out", type=str, default="data/viz/grasp_pose_rollout.mp4"
 parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--num_pc_points", type=int, default=128)
 parser.add_argument("--pc_embed_dim", type=int, default=128)
-parser.add_argument("--cam_eye", type=float, nargs=3, default=[0.66, -0.5, 1.22],
+parser.add_argument("--cam_eye", type=float, nargs=3, default=[0.85, -0.35, 0.45],
                     help="Video camera position (world x y z), near the object")
-parser.add_argument("--cam_target", type=float, nargs=3, default=[0.31, -0.02, 0.9],
+parser.add_argument("--cam_target", type=float, nargs=3, default=[0.50, 0.0, 0.12],
                     help="Video camera look-at point (world x y z) = object")
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()

@@ -20,6 +20,7 @@ import torch
 
 from isaaclab.envs import DirectRLEnv
 from isaaclab.assets import Articulation, RigidObject
+from isaaclab.sensors import ContactSensor, ContactSensorCfg
 
 from envs._paths import data_path
 from envs.grasp_pose_env_cfg import (
@@ -45,9 +46,20 @@ class GraspPoseEnv(DirectRLEnv):
         super().__init__(cfg, render_mode=render_mode)
 
         # ── Joint indices (resolved after super().__init__ builds the scene) ──
-        self._arm_dof_idx, _ = self._robot.find_joints(cfg.left_arm_joint_names)
-        self._grip_dof_idx, _ = self._robot.find_joints(cfg.left_gripper_joint_names)
-        self._leg_dof_idx, _ = self._robot.find_joints(cfg.leg_joint_names)
+        self._arm_dof_idx, _ = self._robot.find_joints(cfg.arm_joint_names)
+        self._grip_dof_idx, self._grip_names = self._robot.find_joints(
+            cfg.gripper_joint_names
+        )
+        if cfg.hand_tuck_joint_names:
+            self._hand_tuck_idx, self._hand_tuck_names = self._robot.find_joints(
+                cfg.hand_tuck_joint_names
+            )
+        else:
+            self._hand_tuck_idx, self._hand_tuck_names = [], []
+        if cfg.leg_joint_names:
+            self._leg_dof_idx, _ = self._robot.find_joints(cfg.leg_joint_names)
+        else:
+            self._leg_dof_idx = []
         self._ee_body_idx, _  = self._robot.find_bodies(cfg.ee_body_name)
         self._ee_body_idx     = self._ee_body_idx[0]
 
@@ -64,7 +76,10 @@ class GraspPoseEnv(DirectRLEnv):
                 arr = np.zeros((_PC_PRE_N, 3), dtype=np.float32)
                 print(f"[GraspPoseEnv] WARNING: missing PC for {name}, using zeros")
             pcs.append(torch.tensor(arr, dtype=torch.float32))
-        self._obj_pcs = torch.stack(pcs, dim=0).to(self.device)  # (NUM_SHAPES, 512, 3)
+        # Scale the observed point cloud to match the up-scaled spawned object.
+        self._obj_pcs = (
+            torch.stack(pcs, dim=0).to(self.device) * self.cfg.object_scale
+        )  # (NUM_SHAPES, 512, 3)
 
         # ── Per-env state ──────────────────────────────────────────────────────
         B = self.num_envs
@@ -91,15 +106,31 @@ class GraspPoseEnv(DirectRLEnv):
         self._exec_step    = 0   # phase counter, reset in _pre_physics_step
         self._arm_q_des = self._home_joint_pos[:, self._arm_dof_idx].clone()
 
-        # Hold right arm / legs / torso at home — only left arm + gripper move.
+        # Arm + parallel gripper (and optional tuck joints) are controlled.
         controlled = set(self._arm_dof_idx) | set(self._grip_dof_idx)
+        if self._hand_tuck_idx:
+            controlled |= set(self._hand_tuck_idx)
         self._idle_dof_idx = [i for i in range(self._robot.num_joints) if i not in controlled]
 
-        self._ee_jac_idx = self._ee_body_idx - 1  # fixed-base robot (unused with numeric IK)
+        self._ee_jac_idx = self._ee_body_idx - 1
 
-        # Gripper open/close limits (radians, from joint limits)
-        self._gripper_open  = torch.tensor([ 1.00,  0.52], device=self.device)
-        self._gripper_close = torch.tensor([-0.40, -0.20], device=self.device)
+        # Parallel 2-finger gripper: both joints share the same open/close value.
+        n_grip = len(self._grip_dof_idx)
+        self._gripper_open = torch.full(
+            (n_grip,), cfg.gripper_open_val, device=self.device
+        )
+        self._gripper_close = torch.full(
+            (n_grip,), cfg.gripper_close_val, device=self.device
+        )
+        if self._hand_tuck_idx:
+            tuck_pose = {
+                "left_zero_joint": 0.0,
+                "left_five_joint":  1.0,
+                "left_six_joint":   0.52,
+            }
+            self._hand_tuck = torch.tensor(
+                [tuck_pose[n] for n in self._hand_tuck_names], device=self.device
+            )
 
     # ── Scene setup ────────────────────────────────────────────────────────────
 
@@ -116,6 +147,16 @@ class GraspPoseEnv(DirectRLEnv):
             obj = RigidObject(obj_cfg)
             self.scene.rigid_objects[name] = obj
             self._objs.append(obj)
+
+        self._finger_contact = ContactSensor(
+            ContactSensorCfg(
+                prim_path=self.cfg.finger_contact_prim_path,
+                history_length=0,
+                track_air_time=False,
+                filter_prim_paths_expr=self.cfg.finger_contact_filter_paths,
+            )
+        )
+        self.scene.sensors["finger_contact"] = self._finger_contact
 
         self.scene.clone_environments(copy_from_source=False)
         self.scene.filter_collisions(global_prim_paths=[])
@@ -216,8 +257,16 @@ class GraspPoseEnv(DirectRLEnv):
                 state = obj.data.root_state_w[mask]
                 self._obj_anchor[mask] = state
 
+    def _hold_hand_tuck(self):
+        """Keep optional tucked joints fixed (unused on Franka parallel gripper)."""
+        if not self._hand_tuck_idx:
+            return
+        q = self._hand_tuck.unsqueeze(0).expand(self.num_envs, -1)
+        self._robot.set_joint_position_target(q, joint_ids=self._hand_tuck_idx)
+
     def _hold_idle_joints(self):
-        """Lock legs, torso, and right arm at the home pose."""
+        """Lock uncontrolled joints at home (none on Franka — all joints driven)."""
+        self._hold_hand_tuck()
         if not self._idle_dof_idx:
             return
         self._robot.set_joint_position_target(
@@ -230,12 +279,14 @@ class GraspPoseEnv(DirectRLEnv):
         self._pin_objects()
 
     def _sync_grasped_object(self):
-        """After close, move the object with the palm (simulated successful grasp)."""
-        if not self._grasp_locked.any():
+        """Move the object with the hand only for envs with live finger contact."""
+        in_contact = self._fingers_in_contact()
+        self._grasp_locked = in_contact
+        if not in_contact.any():
             return
         ee_w = self._robot.data.body_pos_w[:, self._ee_body_idx, :3]
         for i, obj in enumerate(self._objs):
-            mask = self._grasp_locked & (self._env_shape == i)
+            mask = in_contact & (self._env_shape == i)
             if not mask.any():
                 continue
             pinned = self._obj_anchor[mask].clone()
@@ -288,7 +339,8 @@ class GraspPoseEnv(DirectRLEnv):
             q_open = self._gripper_open.unsqueeze(0).expand(self.num_envs, -1)
             self._robot.set_joint_position_target(q_open, joint_ids=self._grip_dof_idx)
         elif s < N_APPROACH + N_CLOSE:
-            self._anchor_objects()
+            # Keep IK on the grasp point while closing so jaws stay around the object.
+            self._do_approach()
             t = (s - N_APPROACH) / N_CLOSE   # 0 → 1
             self._do_gripper(t, lock_at_end=(s + 1 >= N_APPROACH + N_CLOSE))
         elif s < N_APPROACH + N_CLOSE + N_LIFT:
@@ -297,9 +349,11 @@ class GraspPoseEnv(DirectRLEnv):
             self._hold_pose()
 
         self._exec_step += 1
-        if s < N_APPROACH + N_CLOSE:
+        # Pin the object only during approach (stable IK target). During close /
+        # lift / hold the object is fully simulated: gravity, mass, finger contact.
+        if s < N_APPROACH:
             self._pin_objects()
-        elif s < N_APPROACH + N_CLOSE + N_LIFT + N_HOLD:
+        elif (self.cfg.kinematic_grasp or self.cfg.contact_carry) and s >= N_APPROACH + N_CLOSE:
             self._sync_grasped_object()
 
     def _numeric_jacobian_pos(self) -> torch.Tensor:
@@ -321,26 +375,28 @@ class GraspPoseEnv(DirectRLEnv):
         self.sim.forward()
         return J
 
-    def _do_approach(self):
-        """Damped least-squares IK; places the finger grasp zone at the target.
+    def _approach_target_w(self) -> torch.Tensor:
+        """World-frame palm target: object grasp point minus palm→finger offset."""
+        grasp_w = self._obj_anchor[:, :3] + self._grasp_target
+        return grasp_w - self._grasp_pt_offset
 
-        We subtract the palm->grasp-point offset so the palm origin (wrist) ends up
-        behind the object and the fingers reach it, instead of driving the wrist
-        onto the object.
-        """
-        target_w = self._obj_anchor[:, :3] + self._grasp_target - self._grasp_pt_offset
-        self._ik_to(target_w)
+    def _do_approach(self):
+        """Damped least-squares IK toward side pre-grasp then inward pinch pose."""
+        self._ik_to(self._approach_target_w())
 
     def _ik_to(self, target_w: torch.Tensor):
         """Damped least-squares IK moving the palm toward an explicit world target."""
-        self._anchor_objects()
+        # Only pin objects during approach/close (stable IK target). During lift the
+        # object is either free or contact-carried — never pinned back to the table.
+        if self._exec_step < N_APPROACH + N_CLOSE:
+            self._anchor_objects()
         ee_w = self._robot.data.body_pos_w[:, self._ee_body_idx, :3]
         error = target_w - ee_w
 
-        # Recompute the numeric Jacobian only every N steps; reuse it otherwise.
         if self._J_cache is None or (self._ik_call % self.cfg.ik_jacobian_interval == 0):
             self._J_cache = self._numeric_jacobian_pos()
-            self._anchor_objects()   # jacobian perturbs joint state; re-pin objects
+            if self._exec_step < N_APPROACH + N_CLOSE:
+                self._anchor_objects()
         self._ik_call += 1
         J = self._J_cache
 
@@ -376,14 +432,21 @@ class GraspPoseEnv(DirectRLEnv):
         if lock_at_end:
             ee_w = self._robot.data.body_pos_w[:, self._ee_body_idx, :3]
             obj_w = self._get_active_obj_pos()
-            # Proximity-gated grasp: only "grab" if the finger grasp point actually
-            # reached the object. A missed grasp leaves the object on the table (no
-            # free lift), so reward is honest and the policy must predict reachable
-            # grasps. The object is held relative to the palm (rides at the fingers).
-            grasp_pt = ee_w + self._grasp_pt_offset
-            reached = (obj_w - grasp_pt).norm(dim=-1) <= self.cfg.grasp_reach_thresh
-            self._grasp_offset = obj_w - ee_w
-            self._grasp_locked = reached
+            # Record hand-object offset when contact is live (used if carry continues).
+            if self._fingers_in_contact().any():
+                self._grasp_offset = obj_w - ee_w
+            if self.cfg.kinematic_grasp:
+                grasp_pt = ee_w + self._grasp_pt_offset
+                self._grasp_locked = (
+                    (obj_w - grasp_pt).norm(dim=-1) <= self.cfg.grasp_reach_thresh
+                )
+
+    def _fingers_in_contact(self) -> torch.Tensor:
+        """True per-env when enough fingertips register real contact force."""
+        forces = self._finger_contact.data.net_forces_w  # (B, n_fingers, 3)
+        fmag = forces.norm(dim=-1)                        # (B, n_fingers)
+        n_touch = (fmag > self.cfg.contact_force_thresh).sum(dim=-1)
+        return n_touch >= self.cfg.min_contact_fingers
 
     def _do_lift(self):
         """Raise the palm along +z toward a fixed world target set at lift start.
@@ -440,22 +503,28 @@ class GraspPoseEnv(DirectRLEnv):
     # ── Rewards ───────────────────────────────────────────────────────────────
 
     def _get_rewards(self) -> torch.Tensor:
-        # Per-env object height: grasped envs follow the palm (weld proxy), missed
-        # grasps use the object's real height (it stays on the table).
-        ee_w = self._robot.data.body_pos_w[:, self._ee_body_idx, :3]
-        welded_z = (ee_w + self._grasp_offset)[:, 2]
+        # Lift reward uses the object's REAL simulated height only. No welded proxy —
+        # if the fingers don't hold it, it stays on the table and reward is zero.
         actual_z = self._get_active_obj_pos()[:, 2]
-        obj_z = torch.where(self._grasp_locked, welded_z, actual_z)
+        if self.cfg.kinematic_grasp:
+            ee_w = self._robot.data.body_pos_w[:, self._ee_body_idx, :3]
+            welded_z = (ee_w + self._grasp_offset)[:, 2]
+            obj_z = torch.where(self._grasp_locked, welded_z, actual_z)
+        else:
+            obj_z = actual_z
         delta = (obj_z - self._spawn_z).clamp(min=0.0)
         lift_r = (delta / self.cfg.lift_target_m).clamp(max=1.0)
 
         leg_pos = self._robot.data.joint_pos[:, self._leg_dof_idx]
         leg_home = self._home_joint_pos[:, self._leg_dof_idx]
         leg_vel = self._robot.data.joint_vel[:, self._leg_dof_idx]
-        leg_dev = (leg_pos - leg_home).pow(2).mean(dim=-1).sqrt()
-        leg_spd = leg_vel.pow(2).mean(dim=-1).sqrt()
-        leg_still = torch.exp(-leg_dev / self.cfg.leg_dev_scale)
-        leg_still = leg_still * torch.exp(-leg_spd / self.cfg.leg_vel_scale)
+        if len(self._leg_dof_idx) == 0:
+            leg_still = torch.ones(self.num_envs, device=self.device)
+        else:
+            leg_dev = (leg_pos - leg_home).pow(2).mean(dim=-1).sqrt()
+            leg_spd = leg_vel.pow(2).mean(dim=-1).sqrt()
+            leg_still = torch.exp(-leg_dev / self.cfg.leg_dev_scale)
+            leg_still = leg_still * torch.exp(-leg_spd / self.cfg.leg_vel_scale)
 
         self._last_lift_reward = lift_r
         self._last_leg_still = leg_still
