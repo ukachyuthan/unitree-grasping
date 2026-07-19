@@ -8,7 +8,7 @@ Usage:
         --checkpoint data/grasp_logs/grasp_pose_envs32_*/grasp_pose_final.pt \\
         --num_envs 1
 
-    # Headless MP4 (approach → close → lift, ~80 frames per episode)
+    # Headless MP4 (approach → close → lift; grasp markers auto-enabled)
     python wrappers/isaaclab/scripts/play_grasp_pose.py --headless --enable_cameras \\
         --checkpoint data/grasp_logs/.../grasp_pose_final.pt \\
         --video --video_episodes 5 --num_envs 1 \\
@@ -41,6 +41,10 @@ parser.add_argument("--cam_eye", type=float, nargs=3, default=[0.85, -0.35, 0.45
                     help="Video camera position (world x y z), near the object")
 parser.add_argument("--cam_target", type=float, nargs=3, default=[0.50, 0.0, 0.12],
                     help="Video camera look-at point (world x y z) = object")
+parser.add_argument("--visualize_grasp", action="store_true",
+                    help="Show grasp point (yellow) and palm IK target (blue) markers")
+parser.add_argument("--cycle_shapes", action="store_true",
+                    help="Cycle objects 0..9 each episode (for multi-object demo videos)")
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 
@@ -60,7 +64,7 @@ from bootstrap import bootstrap
 bootstrap()
 
 from envs.grasp_pose_env_cfg import GraspPoseEnvCfg, OBS_DIM, NUM_ACTIONS, EXEC_STEPS
-from envs.grasp_pose_env import GraspPoseEnv
+from envs.grasp_pose_env import GraspPoseEnv, _SHAPE_NAMES
 from models.grasp_pose_actor_critic import GraspPoseActorCritic
 
 
@@ -136,6 +140,12 @@ def main():
     env_cfg = GraspPoseEnvCfg()
     env_cfg.scene.num_envs = args.num_envs
     env_cfg.sim.device = device
+    env_cfg.visualize_grasp_point = args.visualize_grasp or args.video or not args.headless
+    if args.cycle_shapes:
+        env_cfg.eval_cycle_shapes = True
+        env_cfg.eval_num_shapes = 10
+    if env_cfg.visualize_grasp_point:
+        print("[play] grasp markers: yellow=policy grasp  blue=palm  green=finger midpoint")
     if args.video:
         env_cfg.sim.render_interval = 1
 
@@ -186,7 +196,8 @@ def main():
         total_reward += r
         if r >= 0.5:
             successes += 1
-        print(f"  ep {ep:3d}/{args.num_episodes}  reward={r:.0f}  "
+        shape = _SHAPE_NAMES[env.unwrapped._env_shape[0].item()]
+        print(f"  ep {ep:3d}/{args.num_episodes}  shape={shape:14s}  reward={r:.0f}  "
               f"lift_ok={r >= 0.5}  action={action[0].cpu().numpy().round(2)}")
 
     n = args.num_episodes

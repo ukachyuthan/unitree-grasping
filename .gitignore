@@ -39,6 +39,7 @@ env/
 # Logs and data
 data/logs/*
 data/grasp_logs/*
+wrappers/isaaclab/data/
 data/checkpoints/*
 data/objects/*
 data/viz/*

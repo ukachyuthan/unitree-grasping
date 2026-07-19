@@ -36,6 +36,8 @@ parser.add_argument("--log_dir",    type=str,   default="data/grasp_logs")
 parser.add_argument("--seed",       type=int,   default=42)
 parser.add_argument("--pretrain",   type=str,   default=None,
                     help="Optional: pretrained encoder .pt for warm start only")
+parser.add_argument("--resume",     type=str,   default=None,
+                    help="Optional: full grasp_pose_*.pt checkpoint to resume policy weights")
 parser.add_argument("--num_pc_points", type=int, default=128)
 parser.add_argument("--pc_embed_dim",  type=int, default=128)
 AppLauncher.add_app_launcher_args(parser)
@@ -249,7 +251,11 @@ def main():
         init_noise_std=0.5,
     ).to(device)
 
-    if args.pretrain and os.path.exists(args.pretrain):
+    if args.resume and os.path.exists(args.resume):
+        ckpt = torch.load(args.resume, map_location=device, weights_only=False)
+        ac.load_state_dict(ckpt["model"], strict=True)
+        print(f"[grasp-pose-train] resume: loaded full policy from {args.resume}")
+    elif args.pretrain and os.path.exists(args.pretrain):
         ckpt = torch.load(args.pretrain, map_location=device, weights_only=False)
         ac.actor_encoder.load_state_dict(ckpt["encoder"])
         ac.critic_encoder.load_state_dict(ckpt["encoder"])

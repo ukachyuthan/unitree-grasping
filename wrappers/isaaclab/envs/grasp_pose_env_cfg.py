@@ -195,8 +195,12 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
     # During lift, carry the object only while finger contact is active THIS step
     # (no latch — contact lost → object falls under gravity).
     contact_carry: bool = True
-
-    # ── Reward ────────────────────────────────────────────────────────────────
+    # Debug: show predicted grasp point (and palm IK target) in the viewport / video.
+    visualize_grasp_point: bool = False
+    grasp_marker_radius_m: float = 0.015
+    # Eval: cycle shapes 0..N-1 each reset instead of random (for demo videos).
+    eval_cycle_shapes: bool = False
+    eval_num_shapes: int = 10
     lift_target_m: float    = 0.05        # 5 cm full reward — clearer success signal
     lift_threshold_m: float = 0.03
     lift_reward_weight: float = 1.0
@@ -223,3 +227,7 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
 
     ik_alpha: float = 0.6
     ik_jacobian_interval: int = 4
+    ik_orient_weight: float = 1.0
+    ik_orient_alpha: float = 0.35
+    ik_orient_pos_thresh: float = 0.04   # metres — only rotate wrist once palm is near target
+    ik_orient_yaw_to_object: bool = True

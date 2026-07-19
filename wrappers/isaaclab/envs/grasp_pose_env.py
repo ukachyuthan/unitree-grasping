@@ -3,7 +3,7 @@ Grasp-pose prediction environment.
 
 Episode structure (one agent step = decimation physics steps):
   1. [step 0]          policy observes point cloud → outputs 3D grasp position
-  2. [steps 0–N_APPROACH]  scripted IK moves EE toward grasp position
+  2. [steps 0–N_APPROACH]  scripted pose IK moves EE toward grasp position + orientation
   3. [steps N_APPROACH–N_CLOSE]  scripted gripper close
   4. [steps N_CLOSE–N_LIFT]  scripted lift (EE target +z)
   5. [steps N_LIFT–end]   hold + measure object height → reward
@@ -17,6 +17,17 @@ from __future__ import annotations
 
 import numpy as np
 import torch
+import isaaclab.sim as sim_utils
+from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
+from isaaclab.utils.math import (
+    quat_rotate,
+    compute_pose_error,
+    quat_from_euler_xyz,
+    euler_xyz_from_quat,
+    quat_mul,
+    matrix_from_quat,
+    quat_inv,
+)
 
 from isaaclab.envs import DirectRLEnv
 from isaaclab.assets import Articulation, RigidObject
@@ -62,6 +73,10 @@ class GraspPoseEnv(DirectRLEnv):
             self._leg_dof_idx = []
         self._ee_body_idx, _  = self._robot.find_bodies(cfg.ee_body_name)
         self._ee_body_idx     = self._ee_body_idx[0]
+        self._left_finger_idx, _ = self._robot.find_bodies("panda_leftfinger")
+        self._right_finger_idx, _ = self._robot.find_bodies("panda_rightfinger")
+        self._left_finger_idx = self._left_finger_idx[0]
+        self._right_finger_idx = self._right_finger_idx[0]
 
         # ── Stored home joint positions (for reset) ───────────────────────────
         self._home_joint_pos = self._robot.data.default_joint_pos.clone()
@@ -87,6 +102,10 @@ class GraspPoseEnv(DirectRLEnv):
         # _grasp_target: offset from object centre in object-LOCAL frame (metres).
         # Converted to robot-base frame inside _do_approach by adding obj_base.
         self._grasp_target = torch.zeros(B, 3, device=self.device)
+        # Object root pose when the policy chooses the grasp (stable, not mutated by carry).
+        self._grasp_origin_w = torch.zeros(B, 3, device=self.device)
+        self._grasp_origin_quat = torch.zeros(B, 4, device=self.device)
+        self._grasp_origin_quat[:, 0] = 1.0
         self._spawn_z      = torch.zeros(B, device=self.device)  # world-frame z at spawn
         self._obj_anchor   = torch.zeros(B, 13, device=self.device)  # root state after settle
         self._grasp_locked = torch.zeros(B, dtype=torch.bool, device=self.device)
@@ -96,15 +115,22 @@ class GraspPoseEnv(DirectRLEnv):
         # Palm world position captured at the start of the lift phase; the lift
         # target ramps up from here so it no longer chases the moving obj anchor.
         self._lift_base_w  = torch.zeros(B, 3, device=self.device)
+        self._lift_quat_w  = torch.zeros(B, 4, device=self.device)
+        self._lift_quat_w[:, 0] = 1.0
         # Offset from palm origin (wrist) to the finger grasp zone (world frame).
         self._grasp_pt_offset = torch.tensor(
             self.cfg.grasp_point_offset, device=self.device
         ).unsqueeze(0)
-        # Cached numeric Jacobian (recomputed every ik_jacobian_interval steps).
+        # Cached Jacobians (recomputed every ik_jacobian_interval steps).
         self._J_cache = None
+        self._J_pos_cache = None
         self._ik_call = 0
         self._exec_step    = 0   # phase counter, reset in _pre_physics_step
+        self._eval_shape_step = 0
         self._arm_q_des = self._home_joint_pos[:, self._arm_dof_idx].clone()
+
+        self.sim.forward()
+        self._home_ee_quat = self._robot.data.body_quat_w[:, self._ee_body_idx].clone()
 
         # Arm + parallel gripper (and optional tuck joints) are controlled.
         controlled = set(self._arm_dof_idx) | set(self._grip_dof_idx)
@@ -132,7 +158,33 @@ class GraspPoseEnv(DirectRLEnv):
                 [tuck_pose[n] for n in self._hand_tuck_names], device=self.device
             )
 
-    # ── Scene setup ────────────────────────────────────────────────────────────
+        self._grasp_marker = None
+        if cfg.visualize_grasp_point:
+            r = cfg.grasp_marker_radius_m
+            marker_cfg = VisualizationMarkersCfg(
+                prim_path="/Visuals/grasp_targets",
+                markers={
+                    "grasp_point": sim_utils.SphereCfg(
+                        radius=r,
+                        visual_material=sim_utils.PreviewSurfaceCfg(
+                            diffuse_color=(1.0, 0.85, 0.0),
+                        ),
+                    ),
+                    "palm_actual": sim_utils.SphereCfg(
+                        radius=r * 0.7,
+                        visual_material=sim_utils.PreviewSurfaceCfg(
+                            diffuse_color=(0.2, 0.55, 1.0),
+                        ),
+                    ),
+                    "finger_mid": sim_utils.SphereCfg(
+                        radius=r * 0.55,
+                        visual_material=sim_utils.PreviewSurfaceCfg(
+                            diffuse_color=(0.2, 0.9, 0.3),
+                        ),
+                    ),
+                },
+            )
+            self._grasp_marker = VisualizationMarkers(marker_cfg)
 
     def _setup_scene(self):
         self._robot = Articulation(self.cfg.robot)
@@ -176,8 +228,16 @@ class GraspPoseEnv(DirectRLEnv):
         self._robot.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
         self._arm_q_des[env_ids] = self._home_joint_pos[env_ids][:, self._arm_dof_idx]
 
-        # 2. Pick a random shape for each env
-        self._env_shape[env_ids] = torch.randint(0, NUM_SHAPES, (n,), device=self.device)
+        # 2. Pick object shape(s) for each env
+        if self.cfg.eval_cycle_shapes:
+            n_shapes = min(self.cfg.eval_num_shapes, NUM_SHAPES)
+            shape_ids = (
+                self._eval_shape_step + torch.arange(n, device=self.device)
+            ) % n_shapes
+            self._env_shape[env_ids] = shape_ids
+            self._eval_shape_step += n
+        else:
+            self._env_shape[env_ids] = torch.randint(0, NUM_SHAPES, (n,), device=self.device)
 
         # 3. Spawn chosen object on table, park others underground
         spawn_x = torch.empty(n, device=self.device).uniform_(*self.cfg.spawn_x_range)
@@ -322,10 +382,50 @@ class GraspPoseEnv(DirectRLEnv):
         gy = (a[:, 1] + 1) / 2 * (y_hi - y_lo) + y_lo
         gz = (a[:, 2] + 1) / 2 * (z_hi - z_lo) + z_lo
         self._grasp_target = torch.stack([gx, gy, gz], dim=-1)  # (B, 3)
+        # Freeze object pose at the grasp decision — _obj_anchor is later overwritten by carry.
+        self._grasp_origin_w = self._obj_anchor[:, :3].clone()
+        self._grasp_origin_quat = self._obj_anchor[:, 3:7].clone()
         self._grasp_locked[:] = False
         self._exec_step = 0
-        self._J_cache = None   # force Jacobian recompute at the start of each episode
+        self._J_cache = None
+        self._J_pos_cache = None
         self._ik_call = 0
+        self._update_grasp_markers()
+
+    def _local_to_world(self, local: torch.Tensor) -> torch.Tensor:
+        """Rotate an object-local offset into world frame at the grasp decision pose."""
+        return self._grasp_origin_w + quat_rotate(self._grasp_origin_quat, local)
+
+    def _grasp_point_world(self) -> torch.Tensor:
+        """Policy grasp point in world frame (object-local offset at decision time)."""
+        return self._local_to_world(self._grasp_target)
+
+    def _palm_actual_w(self) -> torch.Tensor:
+        return self._robot.data.body_pos_w[:, self._ee_body_idx, :3]
+
+    def _finger_midpoint_w(self) -> torch.Tensor:
+        left = self._robot.data.body_pos_w[:, self._left_finger_idx, :3]
+        right = self._robot.data.body_pos_w[:, self._right_finger_idx, :3]
+        return 0.5 * (left + right)
+
+    def _update_grasp_markers(self):
+        """Yellow = policy grasp, blue = actual palm, green = finger midpoint."""
+        if self._grasp_marker is None:
+            return
+        grasp_w = self._grasp_point_world()
+        palm_w = self._palm_actual_w()
+        finger_w = self._finger_midpoint_w()
+        translations = torch.cat([grasp_w, palm_w, finger_w], dim=0)
+        n = self.num_envs
+        marker_indices = torch.cat([
+            torch.zeros(n, dtype=torch.int, device=self.device),
+            torch.ones(n, dtype=torch.int, device=self.device),
+            torch.full((n,), 2, dtype=torch.int, device=self.device),
+        ])
+        self._grasp_marker.visualize(
+            translations=translations,
+            marker_indices=marker_indices,
+        )
 
     # ── Scripted execution (called each physics step within decimation) ────────
 
@@ -356,57 +456,104 @@ class GraspPoseEnv(DirectRLEnv):
         elif (self.cfg.kinematic_grasp or self.cfg.contact_carry) and s >= N_APPROACH + N_CLOSE:
             self._sync_grasped_object()
 
-    def _numeric_jacobian_pos(self) -> torch.Tensor:
-        """Positional Jacobian (B, 3, n_arm) from batched finite differences."""
-        n_arm = len(self._arm_dof_idx)
-        J = torch.zeros(self.num_envs, 3, n_arm, device=self.device)
-        q_full = self._robot.data.joint_pos.clone()
-        v_full = self._robot.data.joint_vel.clone()
-        ee0 = self._robot.data.body_pos_w[:, self._ee_body_idx, :3].clone()
-        eps = 1e-3
-        for j, dof in enumerate(self._arm_dof_idx):
-            q_pert = q_full.clone()
-            q_pert[:, dof] += eps
-            self._robot.write_joint_state_to_sim(q_pert, v_full)
-            self.sim.forward()
-            ee1 = self._robot.data.body_pos_w[:, self._ee_body_idx, :3]
-            J[:, :, j] = (ee1 - ee0) / eps
-        self._robot.write_joint_state_to_sim(q_full, v_full)
-        self.sim.forward()
-        return J
+        if self._grasp_marker is not None:
+            self._update_grasp_markers()
+
+    def _get_arm_jacobian(self) -> torch.Tensor:
+        """End-effector Jacobian (B, 6, n_arm) from PhysX."""
+        return self._robot.root_physx_view.get_jacobians()[
+            :, self._ee_jac_idx, :, self._arm_dof_idx
+        ]
+
+    def _jacobian_rot_base(self) -> torch.Tensor:
+        """Rotational EE Jacobian (B, 3, n_arm) in robot-base frame."""
+        J_rot = self._get_arm_jacobian()[:, 3:, :]
+        base_rot = self._robot.data.root_pose_w[:, 3:7]
+        base_rot_matrix = matrix_from_quat(quat_inv(base_rot))
+        return torch.bmm(base_rot_matrix, J_rot)
+
+    def _jacobian_pos_base(self) -> torch.Tensor:
+        """Translational EE Jacobian (B, 3, n_arm) in robot-base frame."""
+        J_pos = self._get_arm_jacobian()[:, :3, :]
+        base_rot = self._robot.data.root_pose_w[:, 3:7]
+        base_rot_matrix = matrix_from_quat(quat_inv(base_rot))
+        return torch.bmm(base_rot_matrix, J_pos)
+
+    def _dls_delta(
+        self,
+        jacobian: torch.Tensor,
+        error: torch.Tensor,
+        dim: int,
+        lam: float = 0.05,
+    ) -> torch.Tensor:
+        """Damped least-squares joint delta for a 3- or 6-DOF task."""
+        jjt = jacobian @ jacobian.transpose(-1, -2)
+        eye = torch.eye(dim, device=self.device).unsqueeze(0).expand(self.num_envs, -1, -1)
+        return (
+            jacobian.transpose(-1, -2)
+            @ torch.linalg.solve(jjt + lam * eye, error.unsqueeze(-1))
+        ).squeeze(-1)
 
     def _approach_target_w(self) -> torch.Tensor:
-        """World-frame palm target: object grasp point minus palm→finger offset."""
-        grasp_w = self._obj_anchor[:, :3] + self._grasp_target
-        return grasp_w - self._grasp_pt_offset
+        """World-frame palm IK setpoint from the frozen grasp decision pose."""
+        grasp_w = self._grasp_point_world()
+        # grasp_point_offset is in object-local frame (e.g. finger below palm along -z).
+        offset_w = quat_rotate(
+            self._grasp_origin_quat,
+            self._grasp_pt_offset.expand(self.num_envs, -1),
+        )
+        return grasp_w - offset_w
+
+    def _approach_target_quat(self) -> torch.Tensor:
+        """Top-down EE orientation with optional yaw toward the grasp point."""
+        if not self.cfg.ik_orient_yaw_to_object:
+            return self._home_ee_quat.clone()
+        _, _, home_yaw = euler_xyz_from_quat(self._home_ee_quat)
+        grasp_w = self._grasp_point_world()
+        base_xy = self._robot.data.root_pos_w[:, :2]
+        yaw = torch.atan2(grasp_w[:, 1] - base_xy[:, 1], grasp_w[:, 0] - base_xy[:, 0])
+        dyaw = yaw - home_yaw
+        zero = torch.zeros_like(dyaw)
+        dquat = quat_from_euler_xyz(zero, zero, dyaw)
+        return quat_mul(dquat, self._home_ee_quat)
 
     def _do_approach(self):
-        """Damped least-squares IK toward side pre-grasp then inward pinch pose."""
-        self._ik_to(self._approach_target_w())
+        """Position IK toward grasp, then wrist orientation correction."""
+        self._ik_to(self._approach_target_w(), self._approach_target_quat())
 
-    def _ik_to(self, target_w: torch.Tensor):
-        """Damped least-squares IK moving the palm toward an explicit world target."""
-        # Only pin objects during approach/close (stable IK target). During lift the
-        # object is either free or contact-carried — never pinned back to the table.
+    def _ik_to(
+        self,
+        target_w: torch.Tensor,
+        target_quat: torch.Tensor | None = None,
+    ):
+        """Hybrid IK: reliable numeric position, optional PhysX orientation."""
         if self._exec_step < N_APPROACH + N_CLOSE:
             self._anchor_objects()
         ee_w = self._robot.data.body_pos_w[:, self._ee_body_idx, :3]
-        error = target_w - ee_w
+        ee_q = self._robot.data.body_quat_w[:, self._ee_body_idx]
 
-        if self._J_cache is None or (self._ik_call % self.cfg.ik_jacobian_interval == 0):
-            self._J_cache = self._numeric_jacobian_pos()
+        recompute = (
+            self._J_pos_cache is None
+            or self._ik_call % self.cfg.ik_jacobian_interval == 0
+        )
+        if recompute:
+            self._J_pos_cache = self._jacobian_pos_base()
+            if target_quat is not None and self.cfg.ik_orient_alpha > 0.0:
+                self._J_cache = self._jacobian_rot_base()
             if self._exec_step < N_APPROACH + N_CLOSE:
                 self._anchor_objects()
         self._ik_call += 1
-        J = self._J_cache
 
-        lam = 0.05
-        JJT = J @ J.transpose(-1, -2)
-        eye3 = torch.eye(3, device=self.device).unsqueeze(0).expand(self.num_envs, -1, -1)
-        dq = (
-            J.transpose(-1, -2)
-            @ torch.linalg.solve(JJT + lam * eye3, error.unsqueeze(-1))
-        ).squeeze(-1)
+        dq = self._dls_delta(self._J_pos_cache, target_w - ee_w, dim=3)
+
+        if target_quat is not None and self.cfg.ik_orient_alpha > 0.0:
+            _, rot_err = compute_pose_error(
+                ee_w, ee_q, target_w, target_quat, rot_error_type="axis_angle"
+            )
+            rot_err = rot_err * self.cfg.ik_orient_weight
+            dq_rot = self._dls_delta(self._J_cache, rot_err, dim=3, lam=0.08)
+            near = ((target_w - ee_w).norm(dim=-1) < self.cfg.ik_orient_pos_thresh).unsqueeze(-1)
+            dq = dq + self.cfg.ik_orient_alpha * near * dq_rot
 
         alpha = self.cfg.ik_alpha
         q_cur = self._robot.data.joint_pos[:, self._arm_dof_idx]
@@ -432,11 +579,11 @@ class GraspPoseEnv(DirectRLEnv):
         if lock_at_end:
             ee_w = self._robot.data.body_pos_w[:, self._ee_body_idx, :3]
             obj_w = self._get_active_obj_pos()
-            # Record hand-object offset when contact is live (used if carry continues).
-            if self._fingers_in_contact().any():
-                self._grasp_offset = obj_w - ee_w
+            contact = self._fingers_in_contact()
+            if contact.any():
+                self._grasp_offset[contact] = obj_w[contact] - ee_w[contact]
             if self.cfg.kinematic_grasp:
-                grasp_pt = ee_w + self._grasp_pt_offset
+                grasp_pt = ee_w + self._grasp_pt_offset.expand(self.num_envs, -1)
                 self._grasp_locked = (
                     (obj_w - grasp_pt).norm(dim=-1) <= self.cfg.grasp_reach_thresh
                 )
@@ -465,6 +612,7 @@ class GraspPoseEnv(DirectRLEnv):
         k = (self._exec_step - lift_start) + 1   # 1 … N_LIFT
         target_w = self._lift_base_w.clone()
         target_w[:, 2] += self.cfg.lift_height_m * (k / N_LIFT)
+        # Position-only during lift — orientation correction here breaks finger contact.
         self._ik_to(target_w)
 
     # ── Observations ──────────────────────────────────────────────────────────
