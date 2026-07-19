@@ -129,8 +129,14 @@ class GraspPoseEnv(DirectRLEnv):
         self._eval_shape_step = 0
         self._arm_q_des = self._home_joint_pos[:, self._arm_dof_idx].clone()
 
-        self.sim.forward()
-        self._home_ee_quat = self._robot.data.body_quat_w[:, self._ee_body_idx].clone()
+        # Orientation targets decoded from actions 3 and 4.
+        # These are applied every IK step so the policy fully controls wrist angle.
+        self._tilt_target = torch.zeros(B, device=self.device)        # panda_joint5
+        self._roll_target = torch.full((B,), 0.741, device=self.device)  # panda_joint7 home
+        # Indices of tilt/roll joints *within* the arm joint list (0-indexed).
+        # arm_joint_names = [j1, j2, j3, j4, j5, j6, j7] → j5=index 4, j7=index 6.
+        self._tilt_arm_idx = 4   # panda_joint5 within _arm_dof_idx
+        self._roll_arm_idx = 6   # panda_joint7 within _arm_dof_idx
 
         # Arm + parallel gripper (and optional tuck joints) are controlled.
         controlled = set(self._arm_dof_idx) | set(self._grip_dof_idx)
@@ -370,25 +376,30 @@ class GraspPoseEnv(DirectRLEnv):
 
     def _pre_physics_step(self, actions: torch.Tensor):
         """
-        actions: (B, 3) in tanh space [-1, 1].
-        De-normalize to object-local workspace offsets and store.
+        actions: (B, 5) in tanh space [-1, 1].
+          [:3] → object-local grasp position offset
+          [3]  → panda_joint5 tilt (approach angle from vertical)
+          [4]  → panda_joint7 roll (jaw rotation around approach axis)
         """
         x_lo, x_hi = self.cfg.grasp_x_bounds
         y_lo, y_hi = self.cfg.grasp_y_bounds
         z_lo, z_hi = self.cfg.grasp_z_bounds
+        t_lo, t_hi = self.cfg.grasp_tilt_bounds
+        r_lo, r_hi = self.cfg.grasp_roll_bounds
 
         a = actions.clamp(-1, 1)
         gx = (a[:, 0] + 1) / 2 * (x_hi - x_lo) + x_lo
         gy = (a[:, 1] + 1) / 2 * (y_hi - y_lo) + y_lo
         gz = (a[:, 2] + 1) / 2 * (z_hi - z_lo) + z_lo
         self._grasp_target = torch.stack([gx, gy, gz], dim=-1)  # (B, 3)
-        # Freeze object pose at the grasp decision — _obj_anchor is later overwritten by carry.
-        self._grasp_origin_w = self._obj_anchor[:, :3].clone()
-        self._grasp_origin_quat = self._obj_anchor[:, 3:7].clone()
+
+        # Orientation: policy controls wrist tilt and jaw roll per episode.
+        self._tilt_target = (a[:, 3] + 1) / 2 * (t_hi - t_lo) + t_lo  # (B,)
+        self._roll_target = (a[:, 4] + 1) / 2 * (r_hi - r_lo) + r_lo  # (B,)
+
         self._grasp_locked[:] = False
         self._exec_step = 0
         self._J_cache = None
-        self._J_pos_cache = None
         self._ik_call = 0
         self._update_grasp_markers()
 
@@ -560,6 +571,15 @@ class GraspPoseEnv(DirectRLEnv):
         lo = self._robot.data.soft_joint_pos_limits[:, self._arm_dof_idx, 0]
         hi = self._robot.data.soft_joint_pos_limits[:, self._arm_dof_idx, 1]
         q_tgt = (q_cur + alpha * dq).clamp(lo, hi)
+
+        # Override wrist orientation joints with policy-predicted targets.
+        # IK solved joints 1-4 for position; joints 5 and 7 control orientation
+        # and are roughly decoupled from EE position — pinning them here lets the
+        # policy learn to rotate the gripper based on the object's point cloud.
+        ti, ri = self._tilt_arm_idx, self._roll_arm_idx
+        q_tgt[:, ti] = self._tilt_target.clamp(lo[:, ti], hi[:, ti])
+        q_tgt[:, ri] = self._roll_target.clamp(lo[:, ri], hi[:, ri])
+
         self._arm_q_des = q_tgt
         self._robot.set_joint_position_target(q_tgt, joint_ids=self._arm_dof_idx)
 

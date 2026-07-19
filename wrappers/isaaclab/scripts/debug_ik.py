@@ -36,7 +36,7 @@ from bootstrap import bootstrap
 
 bootstrap()
 
-from envs.grasp_pose_env_cfg import GraspPoseEnvCfg, EXEC_STEPS, N_APPROACH, N_CLOSE, N_LIFT
+from envs.grasp_pose_env_cfg import GraspPoseEnvCfg, EXEC_STEPS, N_APPROACH, N_CLOSE, N_LIFT, NUM_ACTIONS
 from envs.grasp_pose_env import GraspPoseEnv
 
 
@@ -203,7 +203,7 @@ def main():
     obs, _ = env.reset()
     print_jacobian_diagnostics(env)
 
-    action = torch.zeros(args.num_envs, 3, device=env.device)
+    action = torch.zeros(args.num_envs, NUM_ACTIONS, device=env.device)
     print(f"[debug_ik] Testing action = {action[0].cpu().numpy()}  (object centre)")
     print(f"[debug_ik] Env device: {env.device}")
     print(f"[debug_ik] Robot root world z: {env._robot.data.root_pos_w[0, 2].item():.3f}")

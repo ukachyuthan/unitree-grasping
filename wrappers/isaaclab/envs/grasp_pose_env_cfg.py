@@ -21,7 +21,11 @@ from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
 
 # ── Dimensions ────────────────────────────────────────────────────────────────
 NUM_PC_POINTS: int = 128
-NUM_ACTIONS: int   = 3      # (x, y, z) grasp position, tanh-normalized
+# Action = (gx, gy, gz, tilt, roll): 3-D grasp position + 2-D EE orientation.
+#   tilt → panda_joint5 (wrist pitch): 0 = top-down, max = near-horizontal side-grasp.
+#   roll → panda_joint7 (wrist roll):  rotates the jaw plane around the approach axis.
+# This lets the policy learn BOTH where and how to orient the gripper per shape.
+NUM_ACTIONS: int   = 5
 OBS_DIM: int       = NUM_PC_POINTS * 3   # 384
 
 # Panda hand max opening ≈ 8 cm — keep objects graspable at this scale.
@@ -174,6 +178,10 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
     grasp_x_bounds: tuple = (-0.07, 0.07)
     grasp_y_bounds: tuple = (-0.07, 0.07)
     grasp_z_bounds: tuple = (-0.07, 0.07)
+    # panda_joint5 tilt range: 0.0 = neutral (top-down), ±1.5 rad = ~85° tilt
+    grasp_tilt_bounds: tuple = (-1.5, 1.5)
+    # panda_joint7 roll range: full rotation of the jaw plane
+    grasp_roll_bounds: tuple = (-2.5, 2.5)
 
     # ── Task geometry ─────────────────────────────────────────────────────────
     object_scale: float = OBJECT_SCALE

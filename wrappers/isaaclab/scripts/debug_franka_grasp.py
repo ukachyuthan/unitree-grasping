@@ -15,7 +15,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from bootstrap import bootstrap
 bootstrap()
-from envs.grasp_pose_env_cfg import GraspPoseEnvCfg, N_APPROACH, N_CLOSE
+from envs.grasp_pose_env_cfg import GraspPoseEnvCfg, N_APPROACH, N_CLOSE, NUM_ACTIONS
 from envs.grasp_pose_env import GraspPoseEnv
 
 def main():
@@ -23,7 +23,7 @@ def main():
     cfg.scene.num_envs = args.num_envs
     env = GraspPoseEnv(cfg=cfg, render_mode=None)
     obs, _ = env.reset()
-    action = torch.zeros(env.num_envs, 3, device=env.device)
+    action = torch.zeros(env.num_envs, NUM_ACTIONS, device=env.device)
     env._pre_physics_step(action)
     close_end = N_APPROACH + N_CLOSE - 1
     for s in range(env.cfg.decimation):
