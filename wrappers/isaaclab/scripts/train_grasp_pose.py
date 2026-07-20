@@ -160,8 +160,10 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
         action_abs = act_all.abs().mean().item()
 
         u = env.unwrapped
-        mean_lift = u._last_lift_reward.mean().item() if hasattr(u, "_last_lift_reward") else float("nan")
-        mean_leg_still = u._last_leg_still.mean().item() if hasattr(u, "_last_leg_still") else float("nan")
+        mean_lift    = u._last_lift_reward.mean().item()    if hasattr(u, "_last_lift_reward")    else float("nan")
+        mean_leg_still = u._last_leg_still.mean().item()   if hasattr(u, "_last_leg_still")      else float("nan")
+        mean_contact = u._last_contact_reward.mean().item() if hasattr(u, "_last_contact_reward") else float("nan")
+        mean_place   = u._last_place_reward.mean().item()   if hasattr(u, "_last_place_reward")   else float("nan")
 
         stats = {
             "iter": it,
@@ -172,6 +174,8 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
             "success_rate": success_rate,
             "mean_lift_reward": mean_lift,
             "mean_leg_still": mean_leg_still,
+            "mean_contact_reward": mean_contact,
+            "mean_place_reward": mean_place,
             "mean_value": mean_value,
             "mean_return": mean_return,
             "mean_advantage": mean_adv,
@@ -191,7 +195,7 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
             print(
                 f"  iter {it:5d}/{max_iters}  "
                 f"reward={mean_rew:.4f}±{std_rew:.4f}  "
-                f"lift={mean_lift:.4f}  leg={mean_leg_still:.4f}  "
+                f"lift={mean_lift:.4f}  contact={mean_contact:.4f}  place={mean_place:.4f}  "
                 f"success={success_rate*100:.1f}%  "
                 f"v_loss={last_value_loss:.4f}  "
                 f"pi_loss={last_policy_loss:.4f}  "
@@ -207,6 +211,8 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
             writer.add_scalar("train/success_rate", success_rate, it)
             writer.add_scalar("train/mean_lift_reward", mean_lift, it)
             writer.add_scalar("train/mean_leg_still", mean_leg_still, it)
+            writer.add_scalar("train/mean_contact_reward", mean_contact, it)
+            writer.add_scalar("train/mean_place_reward", mean_place, it)
             writer.add_scalar("train/mean_value", mean_value, it)
             writer.add_scalar("train/mean_return", mean_return, it)
             writer.add_scalar("train/mean_advantage", mean_adv, it)

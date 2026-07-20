@@ -33,11 +33,14 @@ OBJECT_SCALE: float = 1.5
 OBJECT_MASS: float = 0.20
 
 # ── Execution phases (in physics steps, total = decimation) ──────────────────
-N_APPROACH : int = 80   # IK moves palm above grasp point (top-down)
-N_CLOSE    : int = 45   # longer close for firm contact before lift
-N_LIFT     : int = 40
-N_HOLD     : int = 10
-EXEC_STEPS : int = N_APPROACH + N_CLOSE + N_LIFT + N_HOLD
+N_APPROACH  : int = 80   # IK moves palm above grasp point (top-down)
+N_CLOSE     : int = 45   # longer close for firm contact before lift
+N_LIFT      : int = 40
+N_HOLD      : int = 10
+N_TRANSPORT : int = 60   # lateral move from above A to above B (pick-and-place only)
+N_LOWER     : int = 30   # descend to place height
+N_OPEN      : int = 15   # open gripper and release
+EXEC_STEPS  : int = N_APPROACH + N_CLOSE + N_LIFT + N_HOLD + N_TRANSPORT + N_LOWER + N_OPEN
 
 _OBJECT_PRIM_NAMES = [
     "Torus", "LShape", "TShape", "CShape", "Dumbbell", "Wedge",
@@ -239,3 +242,23 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
     ik_orient_alpha: float = 0.35
     ik_orient_pos_thresh: float = 0.04   # metres — only rotate wrist once palm is near target
     ik_orient_yaw_to_object: bool = True
+
+    # ── Pick-and-place task mode ───────────────────────────────────────────────
+    # 0.0 = all lift-only (default); 0.5 = 50% episodes are pick-and-place.
+    # Transport/lower/open phases always run but hold pose in lift-only mode.
+    task_mode_prob_place: float = 0.0
+    place_goal_x_range: tuple = (0.35, 0.65)
+    place_goal_y_range: tuple = (-0.25, 0.25)
+    place_height_above_table: float = 0.02   # target z when lowering for placement
+    place_reward_weight: float = 1.0         # additive with lift reward in place mode
+    place_sigma_m: float = 0.06              # exp(-dist/sigma) for place reward
+
+    # ── Contact-area reward ────────────────────────────────────────────────────
+    # Bilateral finger coverage: min(left_pts, right_pts) / N_PC near each fingertip.
+    contact_area_reward_weight: float = 0.3
+    contact_area_radius_m: float = 0.045    # 4.5 cm radius around fingertip
+
+    # ── Point-cloud augmentation for camera-angle robustness ──────────────────
+    # Random Z-axis rotation of the observed PC each episode.
+    # Grasp target is inverse-rotated before IK so physics are unaffected.
+    pc_augment_yaw: bool = False
