@@ -262,3 +262,16 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
     # Random Z-axis rotation of the observed PC each episode.
     # Grasp target is inverse-rotated before IK so physics are unaffected.
     pc_augment_yaw: bool = False
+
+    # ── Rendered camera viewpoint augmentation ────────────────────────────────
+    # Spawn a jittered ring of depth cameras around each env's object per episode
+    # so the policy learns to handle arbitrary viewpoints (sim→real robustness).
+    # Requires --enable_cameras when launching (e.g. --headless --enable_cameras).
+    # When False (default) the fast pre-loaded PC path is used instead.
+    use_camera_pc: bool = False
+    camera_width: int = 64
+    camera_height: int = 64
+    camera_horizontal_dist_range: tuple = (0.30, 0.55)  # metres from object centre
+    camera_height_range: tuple = (0.15, 0.40)           # metres above table surface
+    camera_fov_deg: float = 70.0                        # horizontal field of view
+    camera_depth_clip: tuple = (0.05, 1.5)              # valid depth window (metres)

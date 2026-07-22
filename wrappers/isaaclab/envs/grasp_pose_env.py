@@ -32,7 +32,7 @@ from isaaclab.utils.math import (
 
 from isaaclab.envs import DirectRLEnv
 from isaaclab.assets import Articulation, RigidObject
-from isaaclab.sensors import ContactSensor, ContactSensorCfg
+from isaaclab.sensors import ContactSensor, ContactSensorCfg, TiledCamera, TiledCameraCfg
 
 from envs._paths import data_path
 from envs.grasp_pose_env_cfg import (
@@ -129,6 +129,10 @@ class GraspPoseEnv(DirectRLEnv):
         self._transport_start_w = torch.zeros(B, 3, device=self.device)
         # PC augmentation yaw angle per env (0 when pc_augment_yaw=False).
         self._pc_aug_yaw = torch.zeros(B, device=self.device)
+        # World-frame camera poses for the rendered-depth path (set per episode).
+        self._cam_pos_w  = torch.zeros(B, 3, device=self.device)
+        self._cam_quat_w = torch.zeros(B, 4, device=self.device)
+        self._cam_quat_w[:, 0] = 1.0  # identity
         # Palm world position captured at the start of the lift phase; the lift
         # target ramps up from here so it no longer chases the moving obj anchor.
         self._lift_base_w  = torch.zeros(B, 3, device=self.device)
@@ -233,6 +237,30 @@ class GraspPoseEnv(DirectRLEnv):
         )
         self.scene.sensors["finger_contact"] = self._finger_contact
 
+        # Optional: rendered depth camera for viewpoint-diverse PC observations.
+        # Camera is placed at a random pose around each object per episode.
+        # Must be added before clone_environments so each env gets its own prim.
+        if self.cfg.use_camera_pc:
+            self._cam_sensor = TiledCamera(
+                TiledCameraCfg(
+                    prim_path="/World/envs/env_.*/GraspCam",
+                    update_period=0,
+                    history_length=1,
+                    data_types=["distance_to_image_plane"],
+                    spawn=sim_utils.PinholeCameraCfg(
+                        focal_length=24.0,
+                        focus_distance=400.0,
+                        horizontal_aperture=20.955,
+                        clipping_range=self.cfg.camera_depth_clip,
+                    ),
+                    width=self.cfg.camera_width,
+                    height=self.cfg.camera_height,
+                )
+            )
+            self.scene.sensors["grasp_cam"] = self._cam_sensor
+        else:
+            self._cam_sensor = None
+
         self.scene.clone_environments(copy_from_source=False)
         self.scene.filter_collisions(global_prim_paths=[])
 
@@ -311,6 +339,22 @@ class GraspPoseEnv(DirectRLEnv):
             + self.scene.env_origins[env_ids]
         )
         self._last_hold_obj_z[env_ids] = self._spawn_z[env_ids]
+
+        # Randomise camera positions for the reset envs and force one render
+        # so _get_observations sees fresh depth at the new pose.
+        if self._cam_sensor is not None:
+            obj_pos = self._obj_anchor[env_ids, :3]      # world frame
+            cam_pos, cam_quat = self._random_camera_poses(env_ids, obj_pos)
+            self._cam_pos_w[env_ids]  = cam_pos
+            self._cam_quat_w[env_ids] = cam_quat
+            # Update ALL cameras at once (TiledCamera requires full-tensor update).
+            self._cam_sensor.set_world_poses(
+                self._cam_pos_w, self._cam_quat_w, convention="opengl"
+            )
+            # Force a render step so the buffer is current when _get_observations runs.
+            self.scene.write_data_to_sim()
+            self.sim.step(render=True)
+            self.scene.update(dt=self.physics_dt)
 
     def _settle_physics(self, n_steps: int | None = None):
         """Let spawned objects find their true resting height before the policy acts.
@@ -754,6 +798,178 @@ class GraspPoseEnv(DirectRLEnv):
         # Position-only during lift — orientation correction here breaks finger contact.
         self._ik_to(target_w)
 
+    # ── Camera helpers ────────────────────────────────────────────────────────
+
+    def _lookat_quat(self, eye: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """Quaternion (w,x,y,z) for a camera at `eye` looking toward `target`.
+
+        Uses the OpenGL camera convention: +X right, +Y up, -Z forward.
+        World is Z-up.  Result is suitable for TiledCamera.set_world_poses
+        with convention="opengl".
+        """
+        fwd = target - eye                                              # (B, 3)
+        fwd = fwd / fwd.norm(dim=-1, keepdim=True).clamp(min=1e-8)
+
+        world_up = torch.zeros_like(fwd); world_up[:, 2] = 1.0        # Z-up world
+        alt_up   = torch.zeros_like(fwd); alt_up[:, 1]   = 1.0        # fallback Y
+        degenerate = fwd[:, 2].abs() > 0.98
+        wup = torch.where(degenerate.unsqueeze(-1), alt_up, world_up)
+
+        right = torch.linalg.cross(fwd, wup)
+        right = right / right.norm(dim=-1, keepdim=True).clamp(min=1e-8)
+        up    = torch.linalg.cross(right, fwd)                         # camera +Y
+
+        # Camera-to-world rotation matrix: cols = [right, up, -fwd]
+        R = torch.stack([right, up, -fwd], dim=-1)                     # (B, 3, 3)
+
+        # Shepperd's method: rotation matrix → quaternion (w, x, y, z)
+        tr = R[:, 0, 0] + R[:, 1, 1] + R[:, 2, 2]
+        B  = eye.shape[0]
+        q  = torch.zeros(B, 4, device=eye.device, dtype=eye.dtype)
+
+        m0 = tr > 0
+        if m0.any():
+            s = (tr[m0] + 1.0).sqrt() * 2
+            q[m0, 0] = 0.25 * s
+            q[m0, 1] = (R[m0, 2, 1] - R[m0, 1, 2]) / s
+            q[m0, 2] = (R[m0, 0, 2] - R[m0, 2, 0]) / s
+            q[m0, 3] = (R[m0, 1, 0] - R[m0, 0, 1]) / s
+
+        m1 = ~m0 & (R[:, 0, 0] >= R[:, 1, 1]) & (R[:, 0, 0] >= R[:, 2, 2])
+        if m1.any():
+            s = (1.0 + R[m1, 0, 0] - R[m1, 1, 1] - R[m1, 2, 2]).clamp(0).sqrt() * 2
+            q[m1, 0] = (R[m1, 2, 1] - R[m1, 1, 2]) / s.clamp(1e-8)
+            q[m1, 1] = 0.25 * s
+            q[m1, 2] = (R[m1, 0, 1] + R[m1, 1, 0]) / s.clamp(1e-8)
+            q[m1, 3] = (R[m1, 0, 2] + R[m1, 2, 0]) / s.clamp(1e-8)
+
+        m2 = ~m0 & ~m1 & (R[:, 1, 1] >= R[:, 2, 2])
+        if m2.any():
+            s = (1.0 + R[m2, 1, 1] - R[m2, 0, 0] - R[m2, 2, 2]).clamp(0).sqrt() * 2
+            q[m2, 0] = (R[m2, 0, 2] - R[m2, 2, 0]) / s.clamp(1e-8)
+            q[m2, 1] = (R[m2, 0, 1] + R[m2, 1, 0]) / s.clamp(1e-8)
+            q[m2, 2] = 0.25 * s
+            q[m2, 3] = (R[m2, 1, 2] + R[m2, 2, 1]) / s.clamp(1e-8)
+
+        m3 = ~m0 & ~m1 & ~m2
+        if m3.any():
+            s = (1.0 + R[m3, 2, 2] - R[m3, 0, 0] - R[m3, 1, 1]).clamp(0).sqrt() * 2
+            q[m3, 0] = (R[m3, 1, 0] - R[m3, 0, 1]) / s.clamp(1e-8)
+            q[m3, 1] = (R[m3, 0, 2] + R[m3, 2, 0]) / s.clamp(1e-8)
+            q[m3, 2] = (R[m3, 1, 2] + R[m3, 2, 1]) / s.clamp(1e-8)
+            q[m3, 3] = 0.25 * s
+
+        return q / q.norm(dim=-1, keepdim=True).clamp(1e-8)
+
+    def _random_camera_poses(
+        self, env_ids: torch.Tensor, obj_pos: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Sample one camera pose per env on a randomised ring around the object.
+
+        Azimuth is uniform in [0, 2π].  Horizontal radius and height are drawn
+        from the configured ranges.  The camera is oriented to look at obj_pos.
+
+        Returns:
+            cam_pos  (n, 3) — world-frame camera positions
+            cam_quat (n, 4) — world-frame camera quaternions (OpenGL convention)
+        """
+        n = len(env_ids)
+        az    = torch.empty(n, device=self.device).uniform_(0.0, 2.0 * math.pi)
+        h_r   = torch.empty(n, device=self.device).uniform_(*self.cfg.camera_horizontal_dist_range)
+        elev  = torch.empty(n, device=self.device).uniform_(*self.cfg.camera_height_range)
+
+        cam_x = obj_pos[:, 0] + h_r * az.cos()
+        cam_y = obj_pos[:, 1] + h_r * az.sin()
+        cam_z = torch.full((n,), self.cfg.table_surface_z, device=self.device) + elev
+
+        cam_pos  = torch.stack([cam_x, cam_y, cam_z], dim=-1)   # (n, 3)
+        cam_quat = self._lookat_quat(cam_pos, obj_pos)           # (n, 4)
+        return cam_pos, cam_quat
+
+    def _depth_to_pc_local(self, depth: torch.Tensor) -> torch.Tensor:
+        """Unproject depth image to a point cloud in object-local frame.
+
+        Args:
+            depth: (B, H, W) distance_to_image_plane in metres (positive, NaN = invalid).
+
+        Returns:
+            pc: (B, NUM_PC_POINTS, 3) sampled point cloud in object-local frame.
+
+        Pipeline:
+            1. Unproject each pixel → camera frame (OpenGL: X right, Y up, -Z forward).
+            2. Rotate + translate → world frame using stored camera pose.
+            3. Filter: valid depth AND above table surface (strips table background).
+            4. Transform → object-local frame (inverse of settled object pose).
+            5. Random sample NUM_PC_POINTS per env; repeat-sample if too few points.
+        """
+        B, H, W = depth.shape
+        fov_rad = self.cfg.camera_fov_deg * (math.pi / 180.0)
+        fx = W / (2.0 * math.tan(fov_rad / 2.0))
+        fy = fx                                             # square pixels
+        cx, cy = W / 2.0, H / 2.0
+        d_min, d_max = self.cfg.camera_depth_clip
+
+        # Pixel grid — built once, reused across calls (move to __init__ if profiling shows cost)
+        u = torch.arange(W, device=self.device, dtype=torch.float32)  # (W,)
+        v = torch.arange(H, device=self.device, dtype=torch.float32)  # (H,)
+        uu, vv = torch.meshgrid(u, v, indexing="xy")                  # (H, W) each
+
+        # Unproject: OpenGL camera frame (X right, Y up, -Z forward)
+        d = depth                                            # (B, H, W)
+        x_c =  (uu - cx).unsqueeze(0) / fx * d             # (B, H, W)
+        y_c = -(vv - cy).unsqueeze(0) / fy * d             # flip image-v → camera-Y
+        z_c = -d                                            # -Z is forward in OpenGL
+        pts_cam = torch.stack([x_c, y_c, z_c], dim=-1)    # (B, H, W, 3)
+        pts_cam = pts_cam.reshape(B, H * W, 3)
+
+        # Depth validity mask
+        valid = (d > d_min) & (d < d_max) & d.isfinite()
+        valid = valid.reshape(B, H * W)                     # (B, H*W)
+
+        # Camera → world: rotate by stored camera quaternion, then translate
+        HW  = H * W
+        q_e = self._cam_quat_w.unsqueeze(1).expand(-1, HW, -1).reshape(B * HW, 4)
+        p_e = self._cam_pos_w.unsqueeze(1).expand(-1, HW, -1).reshape(B * HW, 3)
+        pts_world = quat_rotate(q_e, pts_cam.reshape(B * HW, 3)) + p_e
+        pts_world = pts_world.reshape(B, HW, 3)             # (B, H*W, 3)
+
+        # Strip table: only keep points above the table surface + small margin
+        table_z = self.cfg.table_surface_z + 0.015          # 1.5 cm clearance
+        valid   = valid & (pts_world[:, :, 2] > table_z)
+
+        # World → object-local frame
+        obj_w = self._obj_anchor[:, :3]                     # (B, 3)
+        inv_q = quat_inv(self._obj_anchor[:, 3:7])          # (B, 4)
+        diff  = (pts_world - obj_w.unsqueeze(1)).reshape(B * HW, 3)
+        iq_e  = inv_q.unsqueeze(1).expand(-1, HW, -1).reshape(B * HW, 4)
+        pts_local = quat_rotate(iq_e, diff).reshape(B, HW, 3)
+
+        # Vectorised random sampling: high score for valid pixels, -inf otherwise
+        scores = torch.where(
+            valid,
+            torch.rand(B, HW, device=self.device),
+            torch.full((B, HW), float("-inf"), device=self.device),
+        )
+        _, top_idx = scores.topk(NUM_PC_POINTS, dim=-1, sorted=False)  # (B, N)
+        pc = pts_local.gather(1, top_idx.unsqueeze(-1).expand(-1, -1, 3))
+
+        # Fix envs where depth sees fewer than NUM_PC_POINTS object pixels.
+        # For those envs repeat-sample from whatever valid points exist; fall back
+        # to the pre-loaded PC if the camera sees nothing at all.
+        n_valid = valid.sum(dim=-1)  # (B,)
+        for bi in (n_valid < NUM_PC_POINTS).nonzero(as_tuple=False).view(-1):
+            nv = n_valid[bi].item()
+            if nv == 0:
+                fallback = self._obj_pcs[self._env_shape[bi]]
+                ridx = torch.randint(0, _PC_PRE_N, (NUM_PC_POINTS,), device=self.device)
+                pc[bi] = fallback[ridx]
+            else:
+                vpts = pts_local[bi][valid[bi]]              # (nv, 3)
+                ridx = torch.randint(0, int(nv), (NUM_PC_POINTS,), device=self.device)
+                pc[bi] = vpts[ridx]
+
+        return pc   # (B, NUM_PC_POINTS, 3) in object-local frame
+
     # ── Observations ──────────────────────────────────────────────────────────
 
     def _get_observations(self) -> dict:
@@ -762,33 +978,47 @@ class GraspPoseEnv(DirectRLEnv):
         return {"policy": pc_flat}
 
     def _synthesize_pointcloud(self) -> torch.Tensor:
-        """Sub-sample pre-loaded PCs + add noise + optional random Z rotation.
+        """Point cloud observation in object-local frame.
 
-        Returns PC in OBJECT-LOCAL frame (centred at object origin).
-        When pc_augment_yaw=True a random Z-axis rotation is applied per env so
-        the policy learns to be robust to different camera viewing angles.
-        The augmentation angle is stored in _pc_aug_yaw and used in _pre_physics_step
-        to rotate the grasp target back to the true object-local frame before IK.
+        Two paths:
+        • use_camera_pc=True  — rendered depth from a per-episode randomised camera
+          position.  The camera branch produces viewpoint-diverse observations for
+          sim→real robustness.  Requires --enable_cameras at launch.
+        • use_camera_pc=False — fast path: sub-sample pre-loaded 512-pt PC + noise
+          + optional random Z rotation (pc_augment_yaw).
+
+        Returns (B, NUM_PC_POINTS * 3) flattened, always in object-local frame.
+        _pc_aug_yaw is zeroed for the camera path so _pre_physics_step's inverse
+        rotation is a no-op (the projection pipeline already gives true local coords).
         """
-        B  = self.num_envs
-        shape_pcs = self._obj_pcs[self._env_shape]   # (B, 512, 3)
+        B = self.num_envs
 
-        idx      = torch.randint(0, _PC_PRE_N, (B, NUM_PC_POINTS), device=self.device)
-        pc_local = shape_pcs.gather(1, idx.unsqueeze(-1).expand(-1, -1, 3))  # (B, N, 3)
-        pc_local = pc_local + torch.randn_like(pc_local) * _PC_NOISE_M
-
-        if self.cfg.pc_augment_yaw:
-            aug_yaw = torch.empty(B, device=self.device).uniform_(-math.pi, math.pi)
-            self._pc_aug_yaw = aug_yaw
-            cos_y = aug_yaw.cos().unsqueeze(-1)   # (B, 1)
-            sin_y = aug_yaw.sin().unsqueeze(-1)
-            x_new = cos_y * pc_local[:, :, 0] - sin_y * pc_local[:, :, 1]  # (B, N)
-            y_new = sin_y * pc_local[:, :, 0] + cos_y * pc_local[:, :, 1]
-            pc_local = torch.stack([x_new, y_new, pc_local[:, :, 2]], dim=-1)
+        if self.cfg.use_camera_pc and self._cam_sensor is not None:
+            # Rendered depth branch — camera was already moved and rendered in _reset_idx.
+            depth = self._cam_sensor.data.output["distance_to_image_plane"]  # (B, H, W, 1)
+            depth = depth[..., 0]                                             # (B, H, W)
+            pc_local = self._depth_to_pc_local(depth)                        # (B, N, 3)
+            pc_local = pc_local + torch.randn_like(pc_local) * _PC_NOISE_M
+            self._pc_aug_yaw.zero_()   # no yaw augment needed — camera varies viewpoint
         else:
-            self._pc_aug_yaw.zero_()
+            # Pre-loaded PC path (fast, no rendering overhead)
+            shape_pcs = self._obj_pcs[self._env_shape]     # (B, 512, 3)
+            idx       = torch.randint(0, _PC_PRE_N, (B, NUM_PC_POINTS), device=self.device)
+            pc_local  = shape_pcs.gather(1, idx.unsqueeze(-1).expand(-1, -1, 3))
+            pc_local  = pc_local + torch.randn_like(pc_local) * _PC_NOISE_M
 
-        return pc_local.view(B, -1)   # (B, N*3) in (possibly rotated) object-local frame
+            if self.cfg.pc_augment_yaw:
+                aug_yaw = torch.empty(B, device=self.device).uniform_(-math.pi, math.pi)
+                self._pc_aug_yaw = aug_yaw
+                cos_y = aug_yaw.cos().unsqueeze(-1)   # (B, 1)
+                sin_y = aug_yaw.sin().unsqueeze(-1)
+                x_new = cos_y * pc_local[:, :, 0] - sin_y * pc_local[:, :, 1]
+                y_new = sin_y * pc_local[:, :, 0] + cos_y * pc_local[:, :, 1]
+                pc_local = torch.stack([x_new, y_new, pc_local[:, :, 2]], dim=-1)
+            else:
+                self._pc_aug_yaw.zero_()
+
+        return pc_local.view(B, -1)   # (B, N*3) in object-local frame
 
     def _get_active_obj_pos(self) -> torch.Tensor:
         """Return world-frame position of the active object in each env."""
