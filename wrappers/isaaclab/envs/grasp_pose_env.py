@@ -135,6 +135,19 @@ class GraspPoseEnv(DirectRLEnv):
         self._transport_start_w = torch.zeros(B, 3, device=self.device)
         # PC augmentation yaw angle per env (0 when pc_augment_yaw=False).
         self._pc_aug_yaw = torch.zeros(B, device=self.device)
+        # Pick-and-place wrist orientation targets (sampled per episode).
+        # Represent the angle the destination container is at — no box in sim.
+        self._place_wrist_roll = torch.zeros(B, device=self.device)
+        self._place_wrist_tilt = torch.zeros(B, device=self.device)
+        # Per-axis rotation flags: each axis is independently randomised per episode
+        # so training sees all combinations (only roll, only tilt, both, neither).
+        self._place_roll_active = torch.zeros(B, dtype=torch.bool, device=self.device)
+        self._place_tilt_active = torch.zeros(B, dtype=torch.bool, device=self.device)
+        # Wrist state at transport start and computed end-targets (set at s_local==0).
+        self._transport_roll_start = torch.zeros(B, device=self.device)
+        self._transport_tilt_start = torch.zeros(B, device=self.device)
+        self._transport_roll_tgt   = torch.zeros(B, device=self.device)
+        self._transport_tilt_tgt   = torch.zeros(B, device=self.device)
         # World-frame camera poses for the rendered-depth path (set per episode).
         self._cam_pos_w  = torch.zeros(B, 3, device=self.device)
         self._cam_quat_w = torch.zeros(B, 4, device=self.device)
@@ -345,6 +358,19 @@ class GraspPoseEnv(DirectRLEnv):
             + self.scene.env_origins[env_ids]
         )
         self._last_hold_obj_z[env_ids] = self._spawn_z[env_ids]
+
+        # Sample random wrist orientation for place-mode episodes.
+        # Each axis is independently enabled (50/50) so training sees all combinations:
+        # neither rotates, only roll, only tilt, or both.  The destination container
+        # has no USD asset — rotation is parameterised only, not physically simulated.
+        self._place_wrist_roll[env_ids] = torch.empty(n, device=self.device).uniform_(
+            *self.cfg.place_wrist_roll_range
+        )
+        self._place_wrist_tilt[env_ids] = torch.empty(n, device=self.device).uniform_(
+            *self.cfg.place_wrist_tilt_range
+        )
+        self._place_roll_active[env_ids] = torch.rand(n, device=self.device) < 0.5
+        self._place_tilt_active[env_ids] = torch.rand(n, device=self.device) < 0.5
 
         # Randomise camera positions for the reset envs and force one render
         # so _get_observations sees fresh depth at the new pose.
@@ -714,22 +740,53 @@ class GraspPoseEnv(DirectRLEnv):
         self._robot.set_joint_position_target(q_close, joint_ids=self._grip_dof_idx)
 
     def _do_transport(self, s_local: int):
-        """Interpolate EE laterally from above A to above B at constant height.
+        """Lateral move from above A to above B, with optional per-axis wrist rotation.
 
-        For lift-only envs the arm just holds its lifted position.
+        For place-mode envs the arm moves to above the goal while the wrist may
+        rotate to simulate depositing into an angled container.  Each episode
+        independently randomises which axes rotate (roll / tilt / both / neither)
+        so the policy must learn grasps resilient to any reorientation combination.
+        The container has no USD asset — rotation is parameterised, not simulated.
+        For lift-only envs the arm holds position and keeps the policy's orientation.
         """
         if s_local == 0:
             self._transport_start_w = (
                 self._robot.data.body_pos_w[:, self._ee_body_idx, :3].clone()
             )
-        t = (s_local + 1) / N_TRANSPORT
+            # Capture the wrist configuration the policy chose (set in _pre_physics_step).
+            self._transport_roll_start = self._roll_target.clone()
+            self._transport_tilt_start = self._tilt_target.clone()
+            # Effective end-target per axis: sampled angle if this axis is active for
+            # this episode, otherwise hold the policy's own orientation (no rotation).
+            place_mask = self._task_mode.bool()
+            self._transport_roll_tgt = torch.where(
+                place_mask & self._place_roll_active,
+                self._place_wrist_roll,
+                self._roll_target,    # no rotation: keep policy's jaw angle
+            )
+            self._transport_tilt_tgt = torch.where(
+                place_mask & self._place_tilt_active,
+                self._place_wrist_tilt,
+                self._tilt_target,    # no rotation: keep policy's tilt angle
+            )
+
+        t   = (s_local + 1) / N_TRANSPORT
+        t_s = _smoothstep(t)
+
         place_above = self._place_goal_w.clone()
-        place_above[:, 2] = self._transport_start_w[:, 2]   # keep z constant laterally
+        place_above[:, 2] = self._transport_start_w[:, 2]
         target_w = torch.where(
             self._task_mode.unsqueeze(-1).bool(),
             self._transport_start_w * (1 - t) + place_above * t,
-            self._transport_start_w,   # hold in lift-only mode
+            self._transport_start_w,
         )
+
+        # Smoothly rotate wrist toward the episode's place targets.
+        # _ik_to reads _roll_target / _tilt_target for the wrist joint overrides,
+        # so updating them here drives rotation without touching position IK math.
+        self._roll_target = (1 - t_s) * self._transport_roll_start + t_s * self._transport_roll_tgt
+        self._tilt_target = (1 - t_s) * self._transport_tilt_start + t_s * self._transport_tilt_tgt
+
         self._ik_to(target_w)
 
     def _do_lower(self, s_local: int):
