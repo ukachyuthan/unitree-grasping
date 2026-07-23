@@ -41,6 +41,12 @@ from envs.grasp_pose_env_cfg import (
     NUM_PC_POINTS,
 )
 
+def _smoothstep(t: float) -> float:
+    """S-curve with zero derivative at t=0 and t=1.  Prevents motion jerk."""
+    t = max(0.0, min(1.0, t))
+    return t * t * (3.0 - 2.0 * t)
+
+
 _SHAPE_NAMES = [
     "torus", "l_shape", "t_shape", "c_shape", "dumbbell",
     "wedge", "star_prism", "bracket", "stepped_cyl",
@@ -556,9 +562,12 @@ class GraspPoseEnv(DirectRLEnv):
             q_open = self._gripper_open.unsqueeze(0).expand(self.num_envs, -1)
             self._robot.set_joint_position_target(q_open, joint_ids=self._grip_dof_idx)
         elif s < T1:
-            self._do_approach()
-            t = (s - T0) / N_CLOSE
-            self._do_gripper(t, lock_at_end=(s + 1 >= T1))
+            # Arm HOLDS its final approach configuration — do NOT keep running IK.
+            # Running IK during close displaces the palm while fingers are animating,
+            # breaking contact before it can be established (same principle as the
+            # reference demo: joint targets are fixed while fingers close).
+            t_smooth = _smoothstep((s - T0) / N_CLOSE)
+            self._do_gripper(t_smooth, lock_at_end=(s + 1 >= T1))
         elif s < T2:
             self._do_lift()
         elif s < T3:
@@ -794,7 +803,8 @@ class GraspPoseEnv(DirectRLEnv):
             )
         k = (self._exec_step - lift_start) + 1   # 1 … N_LIFT
         target_w = self._lift_base_w.clone()
-        target_w[:, 2] += self.cfg.lift_height_m * (k / N_LIFT)
+        # Smoothstep: gentle start and landing — avoids jerking the grasped object loose.
+        target_w[:, 2] += self.cfg.lift_height_m * _smoothstep(k / N_LIFT)
         # Position-only during lift — orientation correction here breaks finger contact.
         self._ik_to(target_w)
 

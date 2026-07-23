@@ -199,7 +199,7 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
     lift_height_m: float    = 0.15
     grasp_reach_thresh: float = 0.06
     kinematic_grasp: bool = False
-    contact_force_thresh: float = 0.05
+    contact_force_thresh: float = 0.01   # lowered: GPU parallel physics can miss 0.05 N contacts
     min_contact_fingers: int   = 2
     # Top-down: fingers hang below palm — negative z offset raises hand above object.
     grasp_point_offset: tuple = (0.0, 0.0, -0.10)
