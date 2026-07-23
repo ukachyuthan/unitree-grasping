@@ -38,7 +38,11 @@ env/
 
 # Logs and data
 data/logs/*
+data/grasp_logs/*
+wrappers/isaaclab/data/
 data/checkpoints/*
+data/objects/*
+data/viz/*
 *.log
 runs/
 tensorboard_logs/
@@ -56,3 +60,9 @@ tensorboard_logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# videos
+.mp4
+
+# misc
+.npz

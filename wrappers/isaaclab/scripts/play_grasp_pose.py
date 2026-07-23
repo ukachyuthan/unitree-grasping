@@ -1,0 +1,217 @@
+#!/usr/bin/env python3
+"""
+Evaluate a trained grasp-pose policy and optionally record MP4 rollouts.
+
+Usage:
+    # Live viewport (recommended on 8 GB GPU — use 1 env)
+    python wrappers/isaaclab/scripts/play_grasp_pose.py \\
+        --checkpoint data/grasp_logs/grasp_pose_envs32_*/grasp_pose_final.pt \\
+        --num_envs 1
+
+    # Headless MP4 (approach → close → lift; grasp markers auto-enabled)
+    python wrappers/isaaclab/scripts/play_grasp_pose.py --headless --enable_cameras \\
+        --checkpoint data/grasp_logs/.../grasp_pose_final.pt \\
+        --video --video_episodes 5 --num_envs 1 \\
+        --out data/viz/grasp_pose_rollout.mp4
+"""
+
+import argparse
+import os
+import sys
+
+from isaaclab.app import AppLauncher
+
+parser = argparse.ArgumentParser(description="Play grasp-pose RL policy")
+parser.add_argument("--checkpoint", type=str, default=None,
+                    help="Trained .pt (omit with --debug_action)")
+parser.add_argument("--debug_action", type=str, choices=["zero", "random"], default=None,
+                    help="Skip checkpoint; use fixed action for IK/exec debug")
+parser.add_argument("--num_envs", type=int, default=1)
+parser.add_argument("--num_episodes", type=int, default=20,
+                    help="Episodes to evaluate (stats printed)")
+parser.add_argument("--video", action="store_true",
+                    help="Record dense MP4 of grasp execution")
+parser.add_argument("--video_episodes", type=int, default=3,
+                    help="Episodes included in the MP4 when --video is set")
+parser.add_argument("--out", type=str, default="data/viz/grasp_pose_rollout.mp4")
+parser.add_argument("--seed", type=int, default=42)
+parser.add_argument("--num_pc_points", type=int, default=128)
+parser.add_argument("--pc_embed_dim", type=int, default=128)
+parser.add_argument("--cam_eye", type=float, nargs=3, default=[0.85, -0.35, 0.45],
+                    help="Video camera position (world x y z), near the object")
+parser.add_argument("--cam_target", type=float, nargs=3, default=[0.50, 0.0, 0.12],
+                    help="Video camera look-at point (world x y z) = object")
+parser.add_argument("--visualize_grasp", action="store_true",
+                    help="Show grasp point (yellow) and palm IK target (blue) markers")
+parser.add_argument("--cycle_shapes", action="store_true",
+                    help="Cycle objects 0..9 each episode (for multi-object demo videos)")
+AppLauncher.add_app_launcher_args(parser)
+args = parser.parse_args()
+
+if args.video:
+    args.enable_cameras = True
+
+app_launcher = AppLauncher(args)
+simulation_app = app_launcher.app
+
+import torch
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from bootstrap import bootstrap
+
+bootstrap()
+
+from envs.grasp_pose_env_cfg import GraspPoseEnvCfg, OBS_DIM, NUM_ACTIONS, EXEC_STEPS
+from envs.grasp_pose_env import GraspPoseEnv, _SHAPE_NAMES
+from models.grasp_pose_actor_critic import GraspPoseActorCritic
+
+
+def load_policy(ckpt_path: str, device: str) -> GraspPoseActorCritic:
+    ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
+    state = ckpt.get("model", ckpt)
+    model = GraspPoseActorCritic(
+        num_actor_obs=OBS_DIM,
+        num_critic_obs=OBS_DIM,
+        num_actions=NUM_ACTIONS,
+        num_pc_points=args.num_pc_points,
+        pc_embed_dim=args.pc_embed_dim,
+    ).to(device)
+    model.load_state_dict(state, strict=True)
+    model.eval()
+    return model
+
+
+def _obs_tensor(obs_td, device):
+    return obs_td["policy"].to(device)
+
+
+def rollout_dense_frames(env: GraspPoseEnv, action: torch.Tensor) -> list:
+    """Step physics manually and capture an rgb frame each sub-step."""
+    u = env.unwrapped
+    u._pre_physics_step(action)
+    capture = u.render_mode == "rgb_array"
+    is_rendering = capture or u.sim.has_gui() or u.sim.has_rtx_sensors()
+    frames = []
+
+    for _ in range(u.cfg.decimation):
+        u._apply_action()
+        u.scene.write_data_to_sim()
+        u.sim.step(render=False)
+        if is_rendering:
+            u.sim.render()
+            if capture:
+                frame = u.render(recompute=True)
+                if frame is not None and frame.size > 0 and frame.any():
+                    frames.append(frame)
+        u.scene.update(dt=u.physics_dt)
+
+    rew = u._get_rewards()
+    done_ids = torch.arange(u.num_envs, device=u.device)
+    u._reset_idx(done_ids)
+    return frames, rew
+
+
+def write_mp4(frames: list, path: str, fps: int = 30):
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    try:
+        import imageio.v2 as imageio
+    except ImportError:
+        import imageio
+
+    writer = imageio.get_writer(
+        path, fps=fps, codec="libx264",
+        pixelformat="yuv420p", quality=8,
+    )
+    for f in frames:
+        writer.append_data(f)
+    writer.close()
+    print(f"[play] saved video → {path}  ({len(frames)} frames)")
+
+
+def main():
+    device = args.device
+    if not args.debug_action and not args.checkpoint:
+        print("[play] provide --checkpoint or --debug_action zero|random")
+        sys.exit(1)
+
+    render_mode = "rgb_array" if args.video else None
+    env_cfg = GraspPoseEnvCfg()
+    env_cfg.scene.num_envs = args.num_envs
+    env_cfg.sim.device = device
+    env_cfg.visualize_grasp_point = args.visualize_grasp or args.video or not args.headless
+    if args.cycle_shapes:
+        env_cfg.eval_cycle_shapes = True
+        env_cfg.eval_num_shapes = 10
+    if env_cfg.visualize_grasp_point:
+        print("[play] grasp markers: yellow=policy grasp  blue=palm  green=finger midpoint")
+    if args.video:
+        env_cfg.sim.render_interval = 1
+
+    env = GraspPoseEnv(cfg=env_cfg, render_mode=render_mode)
+    if args.seed is not None:
+        env.seed(args.seed)
+
+    if args.video:
+        # Move the render camera close to the object for a near view.
+        env.unwrapped.sim.set_camera_view(eye=args.cam_eye, target=args.cam_target)
+        print(f"[play] camera eye={args.cam_eye} target={args.cam_target}")
+
+    policy = None
+    if args.debug_action:
+        print(f"[play] debug mode: action={args.debug_action} (no checkpoint)")
+    else:
+        ckpt = os.path.abspath(args.checkpoint)
+        if not os.path.isfile(ckpt):
+            print(f"[play] checkpoint not found: {ckpt}")
+            sys.exit(1)
+        policy = load_policy(ckpt, device)
+        print(f"[play] loaded {ckpt}")
+
+    print(f"[play] device={device}  envs={args.num_envs}  episodes={args.num_episodes}")
+
+    obs_dict, _ = env.reset()
+    successes, total_reward = 0, 0.0
+    video_frames: list = []
+
+    for ep in range(1, args.num_episodes + 1):
+        if args.debug_action == "zero":
+            action = torch.zeros(args.num_envs, NUM_ACTIONS, device=device)
+        elif args.debug_action == "random":
+            action = torch.empty(args.num_envs, NUM_ACTIONS, device=device).uniform_(-1, 1)
+        else:
+            obs = _obs_tensor(obs_dict, device)
+            with torch.no_grad():
+                action = policy.act_inference(obs)
+
+        if args.video and ep <= args.video_episodes:
+            frames, rew = rollout_dense_frames(env, action)
+            video_frames.extend(frames)
+            obs_dict = env._get_observations()
+        else:
+            obs_dict, rew, _, _, _ = env.step(action)
+
+        r = rew.mean().item()
+        total_reward += r
+        if r >= 0.5:
+            successes += 1
+        shape = _SHAPE_NAMES[env.unwrapped._env_shape[0].item()]
+        print(f"  ep {ep:3d}/{args.num_episodes}  shape={shape:14s}  reward={r:.0f}  "
+              f"lift_ok={r >= 0.5}  action={action[0].cpu().numpy().round(2)}")
+
+    n = args.num_episodes
+    print(f"\n[play] mean_reward={total_reward/n:.3f}  "
+          f"success_rate={100*successes/n:.1f}%  (binary: 1=lifted ≥3cm)")
+
+    if args.video and video_frames:
+        write_mp4(video_frames, os.path.abspath(args.out))
+    elif args.video:
+        print("[play] WARNING: no frames captured — try without --headless or check --enable_cameras")
+
+    env.close()
+
+
+if __name__ == "__main__":
+    main()
+    simulation_app.close()

@@ -1,0 +1,2129 @@
+--- git status ---
+On branch feat-pivot-to-grasping
+Changes not staged for commit:
+  (use "git add/rm <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   __init__.py
+	deleted:    configs/base_config.yaml
+	deleted:    configs/terrain_configs.yaml
+	modified:   data/isaaclab_logs/rough-g1_envs512_20260510_141722/events.out.tfevents.1778447842.achyuthan-ubuntu.32229.0
+	modified:   data/isaaclab_logs/trajectory.npz
+	modified:   environments/__init__.py
+	deleted:    environments/g1_walking_env.py
+	deleted:    environments/isaac_gym_env.py
+	deleted:    environments/mock_env.py
+	modified:   g1_policy.mp4
+	modified:   policies/__init__.py
+	deleted:    policies/policy_manager.py
+	deleted:    policies/sac_policy.py
+	modified:   requirements.txt
+	deleted:    scripts/evaluate.py
+	deleted:    scripts/play_g1.py
+	deleted:    scripts/train.py
+	deleted:    scripts/train_isaaclab_g1.py
+	deleted:    scripts/verify_isaaclab.py
+	deleted:    scripts/visualize_g1.py
+	modified:   training/__init__.py
+	deleted:    training/replay_buffer.py
+	deleted:    training/sac_trainer.py
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	data/grasp_logs/
+	grasping/
+	models/
+	scripts/generate_objects.py
+	scripts/inspect_g1_joints.py
+	scripts/play_g1_grasp.py
+	scripts/train_g1_grasp.py
+
+no changes added to commit (use "git add" and/or "git commit -a") 
+
+
+--- git diff ---
+diff --git a/__init__.py b/__init__.py
+index 967e7f4..7b7b4a7 100644
+--- a/__init__.py
++++ b/__init__.py
+@@ -1,19 +1,9 @@
+ """
+-Unitree Walking: Multi-Terrain RL Training for G1 Humanoid Robot
+-"""
+-
+-__version__ = "0.1.0"
+-__author__ = "Your Name"
++Unitree Grasping — Point-Cloud RL for Novel-Object Pick-and-Place
+ 
+-from .utils import Logger, ConfigLoader
+-from .policies import SACPolicy, PolicyManager
+-from .training import ReplayBuffer, SACTrainer
++Policy trained entirely on procedural objects (superquadrics + convex hulls)
++using a PointNet encoder and GraspNet-bootstrapped reward.
++Zero-shot transfer to never-seen real objects via point cloud representation.
++"""
+ 
+-__all__ = [
+-    "Logger",
+-    "ConfigLoader", 
+-    "SACPolicy",
+-    "PolicyManager",
+-    "ReplayBuffer",
+-    "SACTrainer",
+-]
++__version__ = "0.2.0"
+diff --git a/configs/base_config.yaml b/configs/base_config.yaml
+deleted file mode 100644
+index 90a3819..0000000
+--- a/configs/base_config.yaml
++++ /dev/null
+@@ -1,44 +0,0 @@
+-# Base SAC Training Configuration
+-training:
+-  algorithm: "SAC"
+-  num_env_steps: 1000000
+-  learning_rate: 3e-4
+-  buffer_size: 1000000
+-  batch_size: 256
+-  gamma: 0.99
+-  tau: 0.005
+-  alpha_lr: 3e-4
+-  auto_entropy_tuning: true
+-  
+-  # Training loop
+-  eval_freq: 10000
+-  eval_episodes: 5
+-  save_freq: 50000
+-  log_freq: 1000
+-
+-environment:
+-  # Isaac Gym settings
+-  num_envs: 512
+-  device: "cuda:0"
+-  
+-  # G1 Robot specifics
+-  robot_model: "unitree_g1"
+-  
+-  # Observation and action spaces
+-  obs_dim: null  # Will be auto-detected
+-  action_dim: null  # Will be auto-detected
+-  action_scale: 1.0
+-  
+-  # Simulation parameters
+-  sim_dt: 0.005
+-  control_dt: 0.05
+-  max_episode_length: 1000
+-  
+-# Logging
+-logging:
+-  log_level: "INFO"
+-  use_tensorboard: true
+-  use_wandb: false
+-  project_name: "unitree-g1-walking"
+-  
+-seed: 42
+diff --git a/configs/terrain_configs.yaml b/configs/terrain_configs.yaml
+deleted file mode 100644
+index 94696da..0000000
+--- a/configs/terrain_configs.yaml
++++ /dev/null
+@@ -1,48 +0,0 @@
+-# Terrain-specific configurations
+-terrains:
+-  flat:
+-    name: "Flat Terrain"
+-    description: "Smooth, flat ground"
+-    friction: 1.0
+-    damping: 0.0
+-    roughness: 0.0
+-    slope: 0.0
+-    reward_scale: 1.0
+-    
+-  rocky:
+-    name: "Rocky Terrain"
+-    description: "Uneven, rocky ground with obstacles"
+-    friction: 1.2
+-    damping: 0.1
+-    roughness: 0.5
+-    slope: 0.0
+-    reward_scale: 1.2
+-    
+-  slopes:
+-    name: "Sloped Terrain"
+-    description: "Inclined/declined terrain"
+-    friction: 1.0
+-    damping: 0.05
+-    roughness: 0.1
+-    slope: 15.0  # degrees
+-    reward_scale: 1.1
+-    
+-  stairs:
+-    name: "Stairs"
+-    description: "Step-like terrain"
+-    friction: 1.1
+-    damping: 0.08
+-    roughness: 0.2
+-    slope: 0.0
+-    reward_scale: 1.3
+-
+-# Training progression
+-curriculum:
+-  enabled: false
+-  schedule:
+-    - terrain: "flat"
+-      steps: 0
+-    - terrain: "rocky"
+-      steps: 250000
+-    - terrain: "slopes"
+-      steps: 500000
+diff --git a/data/isaaclab_logs/rough-g1_envs512_20260510_141722/events.out.tfevents.1778447842.achyuthan-ubuntu.32229.0 b/data/isaaclab_logs/rough-g1_envs512_20260510_141722/events.out.tfevents.1778447842.achyuthan-ubuntu.32229.0
+index 268c0af..c1a2b07 100644
+Binary files a/data/isaaclab_logs/rough-g1_envs512_20260510_141722/events.out.tfevents.1778447842.achyuthan-ubuntu.32229.0 and b/data/isaaclab_logs/rough-g1_envs512_20260510_141722/events.out.tfevents.1778447842.achyuthan-ubuntu.32229.0 differ
+diff --git a/data/isaaclab_logs/trajectory.npz b/data/isaaclab_logs/trajectory.npz
+index b9f55a5..13ec59c 100644
+Binary files a/data/isaaclab_logs/trajectory.npz and b/data/isaaclab_logs/trajectory.npz differ
+diff --git a/environments/__init__.py b/environments/__init__.py
+index 4f889b9..8b13789 100644
+--- a/environments/__init__.py
++++ b/environments/__init__.py
+@@ -1,9 +1 @@
+-from .g1_walking_env import G1WalkingEnv
+-from .mock_env import MockG1Environment
+ 
+-try:
+-    from .isaac_gym_env import IsaacGymG1Environment
+-except ImportError:
+-    IsaacGymG1Environment = None
+-
+-__all__ = ["G1WalkingEnv", "MockG1Environment", "IsaacGymG1Environment"]
+diff --git a/environments/g1_walking_env.py b/environments/g1_walking_env.py
+deleted file mode 100644
+index 91d7173..0000000
+--- a/environments/g1_walking_env.py
++++ /dev/null
+@@ -1,81 +0,0 @@
+-"""
+-Base environment for G1 walking in Isaac Gym
+-"""
+-from typing import Dict, Tuple
+-import numpy as np
+-from abc import ABC, abstractmethod
+-
+-
+-class G1WalkingEnv(ABC):
+-    """
+-    Abstract base class for G1 walking environments.
+-    
+-    Handles:
+-    - Robot setup and control
+-    - Observation/action spaces
+-    - Reward calculation
+-    - Episode management
+-    """
+-    
+-    def __init__(self, 
+-                 num_envs: int = 1,
+-                 device: str = "cuda:0",
+-                 terrain_config: Dict = None):
+-        """
+-        Initialize G1 walking environment
+-        
+-        Args:
+-            num_envs: Number of parallel environments
+-            device: Device to run on (cuda:0, cpu, etc.)
+-            terrain_config: Terrain configuration dictionary
+-        """
+-        self.num_envs = num_envs
+-        self.device = device
+-        self.terrain_config = terrain_config or {}
+-        
+-        # Placeholder dimensions - will be set by subclass
+-        self.obs_dim = None
+-        self.action_dim = None
+-        
+-    @abstractmethod
+-    def step(self, actions: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Dict]:
+-        """
+-        Execute one step of environment dynamics
+-        
+-        Args:
+-            actions: Action tensor of shape (num_envs, action_dim)
+-            
+-        Returns:
+-            observations: Next observations
+-            rewards: Reward for each env
+-            dones: Done flags for each env
+-            infos: Additional info dictionaries
+-        """
+-        pass
+-    
+-    @abstractmethod
+-    def reset(self) -> np.ndarray:
+-        """
+-        Reset environment and return initial observations
+-        
+-        Returns:
+-            observations: Initial observations
+-        """
+-        pass
+-    
+-    @abstractmethod
+-    def compute_reward(self, actions: np.ndarray) -> np.ndarray:
+-        """
+-        Compute reward based on current state and actions
+-        
+-        Args:
+-            actions: Action tensor
+-            
+-        Returns:
+-            rewards: Reward for each environment
+-        """
+-        pass
+-    
+-    def close(self):
+-        """Clean up resources"""
+-        pass
+diff --git a/environments/isaac_gym_env.py b/environments/isaac_gym_env.py
+deleted file mode 100644
+index 03f5aa8..0000000
+--- a/environments/isaac_gym_env.py
++++ /dev/null
+@@ -1,244 +0,0 @@
+-"""
+-IsaacLab environment for G1 walking with multiple terrain types
+-"""
+-import torch
+-import numpy as np
+-from typing import Dict, Tuple
+-import omni.isaac.lab as isaac_lab
+-from omni.isaac.lab.envs import DirectRLEnv
+-from omni.isaac.lab.assets import Articulation, RigidObject
+-from omni.isaac.lab.scene import InteractiveScene
+-import omni.isaac.lab_tasks
+-
+-from .g1_walking_env import G1WalkingEnv
+-
+-
+-class IsaacGymG1Environment(G1WalkingEnv):
+-    """
+-    G1 walking environment using NVIDIA IsaacLab
+-    
+-    Features:
+-    - Parallel environment execution on GPU
+-    - Multiple terrain types
+-    - Contact-based rewards
+-    - Vision and proprioceptive observations
+-    """
+-    
+-    def __init__(self,
+-                 num_envs: int = 4096,
+-                 device: str = "cuda:0",
+-                 terrain_config: Dict = None,
+-                 headless: bool = True):
+-        """
+-        Initialize IsaacLab G1 environment
+-        
+-        Args:
+-            num_envs: Number of parallel environments
+-            device: Device to run on (cuda:0, etc.)
+-            terrain_config: Terrain configuration
+-            headless: Run without GUI
+-        """
+-        super().__init__(num_envs, device, terrain_config)
+-        
+-        self.headless = headless
+-        self.device_type = "cuda" if "cuda" in device else "cpu"
+-        self.device_id = int(device.split(":")[-1]) if ":" in device else 0
+-        
+-        # Initialize IsaacLab
+-        self.env_index = 0
+-        
+-        # Create scene
+-        self.scene = self._create_scene()
+-        
+-        # Load assets
+-        self.g1_articulation = self._load_g1_model()
+-        
+-        # Prepare tensors
+-        self._prepare_tensors()
+-        
+-        # Episode tracking
+-        self.episode_steps = torch.zeros(num_envs, device=device)
+-        self.max_episode_length = 1000
+-        
+-    def _create_scene(self):
+-        """Create IsaacLab scene"""
+-        from omni.isaac.lab.sim import SimulationContext
+-        
+-        # Create simulation context
+-        sim_context = SimulationContext(
+-            physics_dt=0.005,  # 200 Hz simulation
+-            rendering_dt=0.05,
+-            backend="torch",
+-            device=self.device,
+-            num_envs=self.num_envs,
+-            headless=self.headless
+-        )
+-        
+-        # Set gravity
+-        sim_context.scene.gravity = torch.tensor([0.0, 0.0, -9.81], device=self.device)
+-        
+-        return sim_context
+-    
+-    def _load_g1_model(self):
+-        """Load G1 robot model"""
+-        from omni.isaac.lab.assets.articulation import ArticulationCfg, ArticulationData
+-        
+-        # Create G1 articulation config
+-        g1_cfg = ArticulationCfg(
+-            prim_path="/World/Robot",
+-            usd_path="omniverse://localhost/NVIDIA/Assets/Isaac/4.0/Isaac/Robots/Unitree/G1/g1.usd",
+-            scale=1.0,
+-            init_state=ArticulationCfg.InitialStateCfg(
+-                pos=(0.0, 0.0, 0.5),
+-                rot=(0.0, 0.0, 0.0, 1.0),
+-            ),
+-            actuators={
+-                "base_legs": {
+-                    "joint_names": [
+-                        ".*_hip_roll",
+-                        ".*_hip_pitch",
+-                        ".*_knee",
+-                        ".*_ankle_pitch",
+-                        ".*_ankle_roll"
+-                    ],
+-                    "effort_limit": 150.0,
+-                    "velocity_limit": 100.0,
+-                }
+-            }
+-        )
+-        
+-        # Create articulation
+-        g1 = Articulation(self.scene, g1_cfg)
+-        
+-        return g1
+-    
+-    def _prepare_tensors(self):
+-        """Prepare GPU tensors for state storage"""
+-        if self.g1_articulation is not None:
+-            self.num_dofs = self.g1_articulation.num_dofs
+-        else:
+-            self.num_dofs = 19  # Default for G1
+-        
+-        # Allocate tensors
+-        self.g1_pos = torch.zeros((self.num_envs, self.num_dofs), device=self.device)
+-        self.g1_vel = torch.zeros((self.num_envs, self.num_dofs), device=self.device)
+-        
+-        self.obs_dim = 48  # TODO: Adjust based on your observation design
+-        self.action_dim = self.num_dofs
+-    
+-    def step(self, actions: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Dict]:
+-        """
+-        Execute one step of environment dynamics
+-        
+-        Args:
+-            actions: Action tensor of shape (num_envs, action_dim)
+-            
+-        Returns:
+-            observations: Next observations
+-            rewards: Reward for each env
+-            dones: Done flags for each env
+-            infos: Additional info dictionaries
+-        """
+-        # Convert actions to tensor
+-        actions_tensor = torch.from_numpy(actions).float().to(self.device)
+-        
+-        # Scale actions to joint ranges
+-        scaled_actions = actions_tensor * 0.5  # Adjust scale as needed
+-        
+-        # Apply actions to all environments via IsaacLab
+-        if self.g1_articulation is not None:
+-            self.g1_articulation.set_joint_effort_target(scaled_actions)
+-        
+-        # Step simulation
+-        self.scene.step()
+-        
+-        # Refresh state from simulation
+-        if self.g1_articulation is not None:
+-            self.g1_pos = self.g1_articulation.data.joint_pos
+-            self.g1_vel = self.g1_articulation.data.joint_vel
+-        
+-        # Get observations
+-        obs = self._get_observations()
+-        
+-        # Compute rewards
+-        rewards = self.compute_reward(actions)
+-        
+-        # Check for termination
+-        dones = self.episode_steps >= self.max_episode_length
+-        
+-        # Update episode steps
+-        self.episode_steps += 1
+-        self.episode_steps[dones] = 0
+-        
+-        # Reset environments that are done
+-        reset_indices = torch.where(dones)[0]
+-        if len(reset_indices) > 0:
+-            for idx in reset_indices:
+-                self._reset_env(idx.item())
+-        
+-        infos = [{"episode_step": self.episode_steps[i].item()} for i in range(self.num_envs)]
+-        
+-        return obs, rewards.cpu().numpy(), dones.cpu().numpy(), infos
+-    
+-    def reset(self) -> np.ndarray:
+-        """Reset all environments and return initial observations"""
+-        if self.g1_articulation is not None:
+-            # Reset all environments
+-            indices = torch.arange(self.num_envs, device=self.device, dtype=torch.long)
+-            self.g1_articulation.reset(indices)
+-        
+-        self.episode_steps.zero_()
+-        return self._get_observations()
+-    
+-    def _reset_env(self, env_idx: int):
+-        """Reset a single environment"""
+-        if self.g1_articulation is not None:
+-            # Reset specific environment
+-            idx_tensor = torch.tensor([env_idx], device=self.device, dtype=torch.long)
+-            self.g1_articulation.reset(idx_tensor)
+-    
+-    def _get_observations(self) -> np.ndarray:
+-        """Extract observations from current state"""
+-        obs = torch.zeros((self.num_envs, self.obs_dim), device=self.device)
+-        
+-        # Fill with joint positions and velocities
+-        for i in range(min(self.num_envs, self.obs_dim // 2)):
+-            if i < self.num_dofs:
+-                obs[:, i] = self.g1_pos[:, i]
+-                if i + self.num_dofs < self.obs_dim:
+-                    obs[:, i + self.num_dofs] = self.g1_vel[:, i]
+-        
+-        return obs.cpu().numpy()
+-    
+-    def compute_reward(self, actions: np.ndarray) -> torch.Tensor:
+-        """
+-        Compute reward based on current state and actions
+-        
+-        Args:
+-            actions: Action tensor
+-            
+-        Returns:
+-            rewards: Reward for each environment
+-        """
+-        rewards = torch.zeros(self.num_envs, device=self.device)
+-        
+-        # Placeholder reward: Small penalty for joint effort
+-        action_tensor = torch.from_numpy(actions).float().to(self.device)
+-        action_penalty = 0.001 * torch.sum(action_tensor ** 2, dim=1)
+-        
+-        # Small positive reward for staying upright
+-        upright_reward = torch.ones(self.num_envs, device=self.device) * 0.1
+-        
+-        rewards = upright_reward - action_penalty
+-        
+-        return rewards
+-    
+-    def close(self):
+-        """Clean up resources"""
+-        if hasattr(self, 'scene'):
+-            self.scene.close()
+-    
+-    def render(self):
+-        """Render the environment"""
+-        if hasattr(self, 'scene') and not self.headless:
+-            self.scene.render()
+diff --git a/environments/mock_env.py b/environments/mock_env.py
+deleted file mode 100644
+index 03133fd..0000000
+--- a/environments/mock_env.py
++++ /dev/null
+@@ -1,180 +0,0 @@
+-"""
+-Mock Isaac Gym environment for testing without hardware requirements
+-"""
+-import numpy as np
+-from typing import Dict, Tuple
+-from .g1_walking_env import G1WalkingEnv
+-
+-
+-class MockG1Environment(G1WalkingEnv):
+-    """
+-    Mock G1 environment for testing without Isaac Gym
+-    
+-    Simulates robot dynamics with simple physics
+-    """
+-    
+-    def __init__(self,
+-                 num_envs: int = 4,
+-                 device: str = "cuda:0",
+-                 terrain_config: Dict = None):
+-        """
+-        Initialize mock environment
+-        
+-        Args:
+-            num_envs: Number of parallel environments
+-            device: Device to run on (ignored for mock)
+-            terrain_config: Terrain configuration
+-        """
+-        super().__init__(num_envs, device, terrain_config)
+-        
+-        self.num_dofs = 19  # G1 has 19 actuated joints
+-        self.obs_dim = 48
+-        self.action_dim = 19
+-        
+-        # State
+-        self.joint_pos = np.zeros((num_envs, self.num_dofs))
+-        self.joint_vel = np.zeros((num_envs, self.num_dofs))
+-        self.root_pos = np.zeros((num_envs, 3))
+-        self.root_vel = np.zeros((num_envs, 3))
+-        self.root_ang = np.zeros((num_envs, 3))  # Roll, pitch, yaw
+-        
+-        # Simulation params
+-        self.dt = 0.005
+-        self.max_steps = 1000
+-        self.step_count = np.zeros(num_envs, dtype=int)
+-        
+-        # Terrain-specific damping
+-        self.friction = terrain_config.get('friction', 1.0) if terrain_config else 1.0
+-        self.damping = terrain_config.get('damping', 0.0) if terrain_config else 0.0
+-    
+-    def reset(self) -> np.ndarray:
+-        """Reset all environments"""
+-        self.joint_pos[:] = 0.0
+-        self.joint_vel[:] = 0.0
+-        self.root_pos[:] = 0.0
+-        self.root_vel[:] = 0.0
+-        self.root_ang[:] = 0.0
+-        self.root_pos[:, 2] = 0.5  # Height above ground
+-        self.step_count[:] = 0
+-        
+-        return self._get_observations()
+-    
+-    def step(self, actions: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Dict]:
+-        """
+-        Execute one step
+-        
+-        Args:
+-            actions: Joint torques or targets
+-            
+-        Returns:
+-            obs, rewards, dones, infos
+-        """
+-        # Simple dynamics: acceleration = action - damping * velocity
+-        acceleration = actions - self.damping * self.joint_vel
+-        
+-        # Integrate velocity
+-        self.joint_vel += acceleration * self.dt
+-        
+-        # Integrate position
+-        self.joint_pos += self.joint_vel * self.dt
+-        
+-        # Clamp joint positions to reasonable ranges
+-        self.joint_pos = np.clip(self.joint_pos, -1.57, 1.57)
+-        
+-        # Simple vertical dynamics
+-        gravity = -9.81
+-        self.root_vel[:, 2] += gravity * self.dt
+-        self.root_pos[:, 2] += self.root_vel[:, 2] * self.dt
+-        
+-        # Ground collision
+-        self.root_pos[:, 2] = np.maximum(self.root_pos[:, 2], 0.0)
+-        if np.any(self.root_pos[:, 2] <= 0.0):
+-            self.root_vel[:, 2] = 0.0
+-        
+-        # Get observations
+-        obs = self._get_observations()
+-        
+-        # Compute rewards
+-        rewards = self.compute_reward(actions)
+-        
+-        # Check termination
+-        self.step_count += 1
+-        dones = self.step_count >= self.max_steps
+-        
+-        # Reset done environments
+-        for i in np.where(dones)[0]:
+-            self._reset_env(i)
+-        
+-        infos = [{"step": self.step_count[i]} for i in range(self.num_envs)]
+-        
+-        return obs, rewards, dones, infos
+-    
+-    def _reset_env(self, env_idx: int):
+-        """Reset a single environment"""
+-        self.joint_pos[env_idx] = 0.0
+-        self.joint_vel[env_idx] = 0.0
+-        self.root_pos[env_idx] = [0.0, 0.0, 0.5]
+-        self.root_vel[env_idx] = 0.0
+-        self.root_ang[env_idx] = 0.0
+-        self.step_count[env_idx] = 0
+-    
+-    def _get_observations(self) -> np.ndarray:
+-        """Extract observations"""
+-        obs = np.zeros((self.num_envs, self.obs_dim))
+-        
+-        # Pack observations: [root_pos, root_vel, root_ang, joint_pos, joint_vel]
+-        idx = 0
+-        
+-        # Root position (3)
+-        obs[:, idx:idx+3] = self.root_pos
+-        idx += 3
+-        
+-        # Root velocity (3)
+-        obs[:, idx:idx+3] = self.root_vel
+-        idx += 3
+-        
+-        # Root orientation (3)
+-        obs[:, idx:idx+3] = self.root_ang
+-        idx += 3
+-        
+-        # Joint positions (19)
+-        obs[:, idx:idx+self.num_dofs] = self.joint_pos
+-        idx += self.num_dofs
+-        
+-        # Joint velocities (19)
+-        obs[:, idx:idx+self.num_dofs] = self.joint_vel
+-        idx += self.num_dofs
+-        
+-        return obs
+-    
+-    def compute_reward(self, actions: np.ndarray) -> np.ndarray:
+-        """
+-        Compute rewards
+-        
+-        Reward components:
+-        - Height reward: Penalize falling
+-        - Smoothness: Penalize jerky actions
+-        - Efficiency: Penalize large actions
+-        """
+-        rewards = np.zeros(self.num_envs)
+-        
+-        # Height reward: encourage standing upright
+-        height_reward = np.where(
+-            self.root_pos[:, 2] > 0.3,
+-            0.5,  # Good height
+-            -1.0   # Fallen
+-        )
+-        
+-        # Smoothness penalty: penalize large joint velocities
+-        velocity_penalty = -0.01 * np.sum(np.abs(self.joint_vel), axis=1)
+-        
+-        # Action penalty: penalize large actions
+-        action_penalty = -0.001 * np.sum(np.abs(actions), axis=1)
+-        
+-        rewards = height_reward + velocity_penalty + action_penalty
+-        
+-        return rewards
+-    
+-    def close(self):
+-        """Close environment"""
+-        pass
+diff --git a/g1_policy.mp4 b/g1_policy.mp4
+index 23341a3..a667a66 100644
+Binary files a/g1_policy.mp4 and b/g1_policy.mp4 differ
+diff --git a/policies/__init__.py b/policies/__init__.py
+index bd9b788..8b13789 100644
+--- a/policies/__init__.py
++++ b/policies/__init__.py
+@@ -1,4 +1 @@
+-from .sac_policy import SACPolicy
+-from .policy_manager import PolicyManager
+ 
+-__all__ = ["SACPolicy", "PolicyManager"]
+diff --git a/policies/policy_manager.py b/policies/policy_manager.py
+deleted file mode 100644
+index 0b2640b..0000000
+--- a/policies/policy_manager.py
++++ /dev/null
+@@ -1,93 +0,0 @@
+-"""
+-Manager for handling multiple terrain-specific policies
+-"""
+-import os
+-from typing import Dict, Optional
+-from .sac_policy import SACPolicy
+-
+-
+-class PolicyManager:
+-    """
+-    Manages multiple SAC policies for different terrains
+-    
+-    Handles:
+-    - Creating and storing policies per terrain
+-    - Saving/loading policies
+-    - Policy selection logic
+-    """
+-    
+-    def __init__(self, checkpoint_dir: str = "data/checkpoints"):
+-        self.checkpoint_dir = checkpoint_dir
+-        self.policies: Dict[str, SACPolicy] = {}
+-        
+-        os.makedirs(checkpoint_dir, exist_ok=True)
+-    
+-    def create_policy(self,
+-                     terrain_name: str,
+-                     obs_dim: int,
+-                     action_dim: int,
+-                     **kwargs) -> SACPolicy:
+-        """
+-        Create a new policy for a terrain
+-        
+-        Args:
+-            terrain_name: Name of the terrain
+-            obs_dim: Observation dimension
+-            action_dim: Action dimension
+-            **kwargs: Additional arguments for SACPolicy
+-            
+-        Returns:
+-            policy: Created SAC policy
+-        """
+-        policy = SACPolicy(obs_dim, action_dim, **kwargs)
+-        self.policies[terrain_name] = policy
+-        return policy
+-    
+-    def get_policy(self, terrain_name: str) -> Optional[SACPolicy]:
+-        """Get policy for a terrain"""
+-        return self.policies.get(terrain_name)
+-    
+-    def save_policy(self, terrain_name: str, identifier: str = ""):
+-        """
+-        Save policy checkpoint
+-        
+-        Args:
+-            terrain_name: Terrain name
+-            identifier: Optional identifier for checkpoint (e.g., step number)
+-        """
+-        if terrain_name not in self.policies:
+-            raise ValueError(f"No policy found for terrain: {terrain_name}")
+-        
+-        filename = f"{terrain_name}_policy"
+-        if identifier:
+-            filename += f"_{identifier}"
+-        filename += ".pt"
+-        
+-        path = os.path.join(self.checkpoint_dir, filename)
+-        self.policies[terrain_name].save(path)
+-    
+-    def load_policy(self, terrain_name: str, identifier: str = ""):
+-        """
+-        Load policy checkpoint
+-        
+-        Args:
+-            terrain_name: Terrain name
+-            identifier: Optional identifier for checkpoint
+-        """
+-        if terrain_name not in self.policies:
+-            raise ValueError(f"No policy found for terrain: {terrain_name}")
+-        
+-        filename = f"{terrain_name}_policy"
+-        if identifier:
+-            filename += f"_{identifier}"
+-        filename += ".pt"
+-        
+-        path = os.path.join(self.checkpoint_dir, filename)
+-        if not os.path.exists(path):
+-            raise FileNotFoundError(f"Policy checkpoint not found: {path}")
+-        
+-        self.policies[terrain_name].load(path)
+-    
+-    def list_terrains(self):
+-        """List all terrain policies"""
+-        return list(self.policies.keys())
+diff --git a/policies/sac_policy.py b/policies/sac_policy.py
+deleted file mode 100644
+index 97e1adc..0000000
+--- a/policies/sac_policy.py
++++ /dev/null
+@@ -1,156 +0,0 @@
+-"""
+-Soft Actor-Critic (SAC) policy implementation
+-"""
+-import torch
+-import torch.nn as nn
+-import torch.optim as optim
+-from typing import Tuple
+-
+-
+-class GaussianActor(nn.Module):
+-    """Actor network for SAC with Gaussian policy"""
+-    
+-    def __init__(self, obs_dim: int, action_dim: int, hidden_dim: int = 256):
+-        super().__init__()
+-        self.fc1 = nn.Linear(obs_dim, hidden_dim)
+-        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+-        self.mu = nn.Linear(hidden_dim, action_dim)
+-        self.log_std = nn.Linear(hidden_dim, action_dim)
+-        
+-        self.activation = nn.ReLU()
+-    
+-    def forward(self, obs: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+-        """
+-        Forward pass
+-        
+-        Args:
+-            obs: Observation tensor
+-            
+-        Returns:
+-            mu: Mean of Gaussian
+-            log_std: Log standard deviation
+-        """
+-        x = self.activation(self.fc1(obs))
+-        x = self.activation(self.fc2(x))
+-        mu = self.mu(x)
+-        log_std = torch.clamp(self.log_std(x), -20, 2)
+-        return mu, log_std
+-
+-
+-class QNetwork(nn.Module):
+-    """Q-network for SAC"""
+-    
+-    def __init__(self, obs_dim: int, action_dim: int, hidden_dim: int = 256):
+-        super().__init__()
+-        self.fc1 = nn.Linear(obs_dim + action_dim, hidden_dim)
+-        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+-        self.fc3 = nn.Linear(hidden_dim, 1)
+-        
+-        self.activation = nn.ReLU()
+-    
+-    def forward(self, obs: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
+-        x = torch.cat([obs, action], dim=-1)
+-        x = self.activation(self.fc1(x))
+-        x = self.activation(self.fc2(x))
+-        return self.fc3(x)
+-
+-
+-class SACPolicy:
+-    """
+-    Soft Actor-Critic policy
+-    
+-    Hyperparameters:
+-    - learning_rate: Learning rate for optimizer
+-    - gamma: Discount factor
+-    - tau: Target network update rate
+-    - alpha_lr: Learning rate for entropy coefficient
+-    """
+-    
+-    def __init__(self, 
+-                 obs_dim: int,
+-                 action_dim: int,
+-                 device: str = "cuda:0",
+-                 learning_rate: float = 3e-4,
+-                 gamma: float = 0.99,
+-                 tau: float = 0.005,
+-                 alpha_lr: float = 3e-4,
+-                 auto_entropy_tuning: bool = True):
+-        """
+-        Initialize SAC policy
+-        
+-        Args:
+-            obs_dim: Observation dimension
+-            action_dim: Action dimension
+-            device: Device to use
+-            learning_rate: Actor/Critic learning rate
+-            gamma: Discount factor
+-            tau: Soft update coefficient
+-            alpha_lr: Entropy coefficient learning rate
+-            auto_entropy_tuning: Whether to auto-tune entropy coefficient
+-        """
+-        self.device = device
+-        self.gamma = gamma
+-        self.tau = tau
+-        self.action_dim = action_dim
+-        self.auto_entropy_tuning = auto_entropy_tuning
+-        
+-        # Networks
+-        self.actor = GaussianActor(obs_dim, action_dim).to(device)
+-        self.q1 = QNetwork(obs_dim, action_dim).to(device)
+-        self.q2 = QNetwork(obs_dim, action_dim).to(device)
+-        self.q1_target = QNetwork(obs_dim, action_dim).to(device)
+-        self.q2_target = QNetwork(obs_dim, action_dim).to(device)
+-        
+-        # Copy weights
+-        self.q1_target.load_state_dict(self.q1.state_dict())
+-        self.q2_target.load_state_dict(self.q2.state_dict())
+-        
+-        # Optimizers
+-        self.actor_opt = optim.Adam(self.actor.parameters(), lr=learning_rate)
+-        self.q1_opt = optim.Adam(self.q1.parameters(), lr=learning_rate)
+-        self.q2_opt = optim.Adam(self.q2.parameters(), lr=learning_rate)
+-        
+-        # Entropy tuning
+-        self.target_entropy = -action_dim
+-        self.log_alpha = torch.zeros(1, requires_grad=True, device=device)
+-        self.alpha_opt = optim.Adam([self.log_alpha], lr=alpha_lr)
+-    
+-    @property
+-    def alpha(self):
+-        return self.log_alpha.exp()
+-    
+-    def select_action(self, obs: torch.Tensor, deterministic: bool = False) -> torch.Tensor:
+-        """
+-        Select action from observation
+-        
+-        Args:
+-            obs: Observation tensor
+-            deterministic: If True, use mean action; else sample
+-            
+-        Returns:
+-            action: Selected action
+-        """
+-        mu, log_std = self.actor(obs)
+-        
+-        if deterministic:
+-            return torch.tanh(mu)
+-        
+-        std = log_std.exp()
+-        z = torch.randn_like(std)
+-        action = torch.tanh(mu + std * z)
+-        return action
+-    
+-    def save(self, path: str):
+-        """Save policy networks to file"""
+-        torch.save({
+-            'actor': self.actor.state_dict(),
+-            'q1': self.q1.state_dict(),
+-            'q2': self.q2.state_dict(),
+-        }, path)
+-    
+-    def load(self, path: str):
+-        """Load policy networks from file"""
+-        checkpoint = torch.load(path)
+-        self.actor.load_state_dict(checkpoint['actor'])
+-        self.q1.load_state_dict(checkpoint['q1'])
+-        self.q2.load_state_dict(checkpoint['q2'])
+diff --git a/requirements.txt b/requirements.txt
+index da87d58..ba3c647 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -1,23 +1,26 @@
+-# Core dependencies
++# ── Core ──────────────────────────────────────────────────────────────────────
+ torch>=2.0.0
+ torchvision>=0.15.0
+-torchaudio>=2.0.0
+-
+-# RL training
+-stable-baselines3>=2.0.0
+ numpy>=1.23.0
+ scipy>=1.10.0
+ 
+-# Isaac Lab - Modern GPU-accelerated simulation
+-isaaclab>=1.0.0
++# ── Simulation ─────────────────────────────────────────────────────────────────
++# Isaac Lab and RSL-RL are installed into the rl_unitree venv; see DEVELOPMENT.md
++# isaaclab (installed via rl_unitree/bin/pip)
++# rsl_rl   (installed via rl_unitree/bin/pip)
++
++# ── Point cloud / mesh tools ──────────────────────────────────────────────────
++trimesh>=4.0.0          # procedural mesh generation (generate_objects.py)
++open3d>=0.17.0          # optional: visualise point clouds during eval
+ 
+-# Utilities
++# ── Utilities ─────────────────────────────────────────────────────────────────
+ pyyaml>=6.0
+ tqdm>=4.65.0
+ tensorboard>=2.13.0
+-wandb>=0.15.0
+ 
+-# Development
++# ── Optional: GraspNet reward bootstrap ──────────────────────────────────────
++# contact-graspnet-pytorch  # install separately; see README for instructions
++
++# ── Dev ───────────────────────────────────────────────────────────────────────
+ black>=23.0.0
+-isort>=5.12.0
+ pytest>=7.0.0
+diff --git a/scripts/evaluate.py b/scripts/evaluate.py
+deleted file mode 100644
+index bf9158a..0000000
+--- a/scripts/evaluate.py
++++ /dev/null
+@@ -1,40 +0,0 @@
+-#!/usr/bin/env python3
+-"""
+-Evaluation script for trained policies
+-"""
+-import argparse
+-import sys
+-from pathlib import Path
+-
+-sys.path.insert(0, str(Path(__file__).parent.parent))
+-
+-
+-def evaluate_policy(terrain_name: str, checkpoint_path: str, num_episodes: int = 5):
+-    """
+-    Evaluate a trained policy
+-    
+-    Args:
+-        terrain_name: Terrain to evaluate on
+-        checkpoint_path: Path to policy checkpoint
+-        num_episodes: Number of episodes to evaluate
+-    """
+-    print(f"Evaluating policy for {terrain_name}")
+-    print(f"Checkpoint: {checkpoint_path}")
+-    print(f"Episodes: {num_episodes}")
+-    
+-    # TODO: Implement evaluation loop
+-
+-
+-def main():
+-    parser = argparse.ArgumentParser(description="Evaluate G1 walking policy")
+-    parser.add_argument("--terrain", type=str, required=True)
+-    parser.add_argument("--checkpoint", type=str, required=True)
+-    parser.add_argument("--episodes", type=int, default=5)
+-    parser.add_argument("--render", action="store_true")
+-    
+-    args = parser.parse_args()
+-    evaluate_policy(args.terrain, args.checkpoint, args.episodes)
+-
+-
+-if __name__ == "__main__":
+-    main()
+diff --git a/scripts/play_g1.py b/scripts/play_g1.py
+deleted file mode 100644
+index d47e2b6..0000000
+--- a/scripts/play_g1.py
++++ /dev/null
+@@ -1,162 +0,0 @@
+-#!/usr/bin/env python3
+-"""
+-Run a trained G1 walking policy headlessly and save a joint trajectory.
+-
+-The trajectory is saved as an npz file which can be replayed in MuJoCo via
+-scripts/visualize_g1.py — no GPU renderer required.
+-
+-Usage:
+-    # Use latest checkpoint from most recent training run
+-    ./rl_unitree/bin/python scripts/play_g1.py --headless
+-
+-    # Specify a run directory
+-    ./rl_unitree/bin/python scripts/play_g1.py --headless --run_dir data/isaaclab_logs/flat-g1-v0_envs512_20250510_123456
+-
+-    # Specify a checkpoint file directly
+-    ./rl_unitree/bin/python scripts/play_g1.py --headless --checkpoint data/isaaclab_logs/.../g1_flat_final.pt
+-
+-    # Override number of rollout steps (default 500)
+-    ./rl_unitree/bin/python scripts/play_g1.py --headless --steps 1000
+-"""
+-import argparse
+-import os
+-import glob
+-
+-from isaaclab.app import AppLauncher
+-
+-parser = argparse.ArgumentParser(description="Run G1 policy headlessly and save trajectory")
+-parser.add_argument("--task", type=str, default="Isaac-Velocity-Flat-G1-v0",
+-                    choices=["Isaac-Velocity-Flat-G1-v0", "Isaac-Velocity-Rough-G1-v0"])
+-parser.add_argument("--run_dir", type=str, default=None,
+-                    help="Training run directory (uses latest if not set)")
+-parser.add_argument("--checkpoint", type=str, default=None,
+-                    help="Path to a specific .pt checkpoint file")
+-parser.add_argument("--log_dir", type=str, default="data/isaaclab_logs")
+-parser.add_argument("--steps", type=int, default=500,
+-                    help="Number of policy steps to record (at 50 Hz → 10 seconds)")
+-parser.add_argument("--out", type=str, default=None,
+-                    help="Output npz path (default: <log_dir>/trajectory.npz)")
+-AppLauncher.add_app_launcher_args(parser)
+-args = parser.parse_args()
+-
+-# Pure headless — never set enable_cameras; any viewport creation triggers Hydra
+-# RTX which segfaults on 8 GB VRAM (Isaac Sim 4.5 allocates 7.5 GB TLAS).
+-args.headless = True
+-
+-app_launcher = AppLauncher(args)
+-simulation_app = app_launcher.app
+-
+-# ── Everything below runs inside the Isaac Sim process ────────────────────────
+-import numpy as np
+-import torch
+-import gymnasium as gym
+-
+-import isaaclab_tasks  # noqa: registers all Isaac-* envs
+-from isaaclab.envs import DirectMARLEnv, multi_agent_to_single_agent
+-from isaaclab_rl.rsl_rl import RslRlVecEnvWrapper
+-from isaaclab_tasks.utils.parse_cfg import parse_env_cfg
+-
+-from rsl_rl.runners import OnPolicyRunner
+-
+-
+-def find_checkpoint(log_dir, run_dir, checkpoint):
+-    if checkpoint:
+-        if not os.path.exists(checkpoint):
+-            raise FileNotFoundError(f"Checkpoint not found: {checkpoint}")
+-        return checkpoint
+-
+-    search_dir = run_dir or log_dir
+-    if not os.path.exists(search_dir):
+-        raise FileNotFoundError(
+-            f"No training logs found at '{search_dir}'.\n"
+-            "Run training first: ./rl_unitree/bin/python scripts/train_isaaclab_g1.py --headless"
+-        )
+-
+-    candidates = glob.glob(os.path.join(search_dir, "**", "g1_flat_final.pt"), recursive=True)
+-    if not candidates:
+-        candidates = glob.glob(os.path.join(search_dir, "**", "model_*.pt"), recursive=True)
+-    if not candidates:
+-        raise FileNotFoundError(f"No checkpoint (.pt) found under '{search_dir}'")
+-
+-    chosen = max(candidates, key=os.path.getmtime)
+-    print(f"[play] Using checkpoint: {chosen}")
+-    return chosen
+-
+-
+-def main():
+-    device = "cuda" if torch.cuda.is_available() else "cpu"
+-    checkpoint_path = find_checkpoint(args.log_dir, args.run_dir, args.checkpoint)
+-
+-    # Play variant: no domain randomisation, no external pushes
+-    play_task = args.task.replace("-v0", "-Play-v0")
+-    print(f"[play] Task: {play_task}  |  Steps: {args.steps}  |  Device: {device}")
+-
+-    env_cfg = parse_env_cfg(play_task, device=device, num_envs=1)
+-    env = gym.make(play_task, cfg=env_cfg)
+-
+-    if isinstance(env.unwrapped, DirectMARLEnv):
+-        env = multi_agent_to_single_agent(env)
+-
+-    env = RslRlVecEnvWrapper(env)
+-
+-    # Load PPO runner config
+-    train_task = args.task
+-    rsl_rl_cfg_entry = gym.spec(train_task).kwargs["rsl_rl_cfg_entry_point"]
+-    module_name, class_name = rsl_rl_cfg_entry.rsplit(":", 1)
+-    import importlib
+-    cfg_module = importlib.import_module(module_name)
+-    runner_cfg = getattr(cfg_module, class_name)()
+-
+-    runner = OnPolicyRunner(env, runner_cfg.to_dict(), log_dir=None, device=device)
+-    runner.load(checkpoint_path)
+-    policy = runner.get_inference_policy(device=device)
+-
+-    # Grab handles to robot articulation for state extraction
+-    isaac_env = env.env.unwrapped
+-    robot = isaac_env.scene["robot"]
+-
+-    joint_names = list(robot.joint_names)
+-    num_joints = len(joint_names)
+-    print(f"[play] Robot has {num_joints} joints: {joint_names[:6]} ...")
+-
+-    # Pre-allocate trajectory buffers
+-    joint_pos_traj = np.zeros((args.steps, num_joints), dtype=np.float32)
+-    root_pos_traj  = np.zeros((args.steps, 3),          dtype=np.float32)
+-    root_quat_traj = np.zeros((args.steps, 4),          dtype=np.float32)  # wxyz
+-
+-    obs, _ = env.get_observations()
+-
+-    print(f"[play] Rolling out {args.steps} steps ...")
+-    for step in range(args.steps):
+-        with torch.inference_mode():
+-            actions = policy(obs)
+-        obs, _, _, _ = env.step(actions)
+-
+-        # Extract state for env 0 (we only spawned 1 env)
+-        joint_pos_traj[step] = robot.data.joint_pos[0].cpu().numpy()
+-        root_pos_traj[step]  = robot.data.root_pos_w[0].cpu().numpy()
+-        root_quat_traj[step] = robot.data.root_quat_w[0].cpu().numpy()
+-
+-        if step % 100 == 0:
+-            print(f"[play] Step {step}/{args.steps}")
+-
+-    out_path = args.out or os.path.join(args.log_dir, "trajectory.npz")
+-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+-    np.savez(
+-        out_path,
+-        joint_names=np.array(joint_names),
+-        joint_pos=joint_pos_traj,
+-        root_pos=root_pos_traj,
+-        root_quat=root_quat_traj,
+-    )
+-    print(f"[play] Trajectory saved to {out_path}")
+-    print(f"[play] Visualize with:")
+-    print(f"  ./rl_unitree/bin/python scripts/visualize_g1.py --traj {out_path}")
+-    print(f"  ./rl_unitree/bin/python scripts/visualize_g1.py --traj {out_path} --video")
+-
+-    env.close()
+-
+-
+-if __name__ == "__main__":
+-    main()
+-    simulation_app.close()
+diff --git a/scripts/train.py b/scripts/train.py
+deleted file mode 100644
+index 44d09ce..0000000
+--- a/scripts/train.py
++++ /dev/null
+@@ -1,225 +0,0 @@
+-#!/usr/bin/env python3
+-"""
+-Main training script for G1 walking
+-
+-This script trains SAC policies for different terrains and can eventually
+-combine them into a meta-policy that selects the best policy per terrain.
+-"""
+-import os
+-import sys
+-import argparse
+-from pathlib import Path
+-
+-# Add repo to path
+-sys.path.insert(0, str(Path(__file__).parent.parent))
+-
+-import torch
+-import numpy as np
+-from tqdm import tqdm
+-
+-from utils import Logger, ConfigLoader
+-
+-# Try to import Isaac Gym, fallback to mock if not available
+-try:
+-    from environments.isaac_gym_env import IsaacGymG1Environment
+-    HAS_ISAAC_GYM = True
+-except ImportError:
+-    HAS_ISAAC_GYM = False
+-    print("WARNING: Isaac Gym not found. Using mock environment for testing.")
+-    print("For real training, install Isaac Gym from: https://developer.nvidia.com/isaac-gym")
+-
+-from environments.mock_env import MockG1Environment
+-from policies import SACPolicy, PolicyManager
+-from training import ReplayBuffer, SACTrainer
+-
+-
+-def train_single_terrain(terrain_name: str, 
+-                        config_path: str = "configs/base_config.yaml",
+-                        num_steps: int = 1000000,
+-                        device: str = "cuda:0",
+-                        headless: bool = True):
+-    """
+-    Train a single terrain policy
+-    
+-    Args:
+-        terrain_name: Name of terrain to train on
+-        config_path: Path to training config
+-        num_steps: Number of training steps
+-        device: Device to train on
+-        headless: Run without GUI
+-    """
+-    logger = Logger(name=f"train_{terrain_name}")
+-    
+-    # Load configs
+-    base_config = ConfigLoader.load(config_path)
+-    terrain_config = ConfigLoader.load("configs/terrain_configs.yaml")
+-    
+-    if terrain_name not in terrain_config['terrains']:
+-        raise ValueError(f"Unknown terrain: {terrain_name}")
+-    
+-    logger.info(f"Starting training for terrain: {terrain_name}")
+-    logger.info(f"Total steps: {num_steps}")
+-    logger.info(f"Device: {device}")
+-    
+-    # Create environment
+-    logger.info("Creating environment...")
+-    try:
+-        if HAS_ISAAC_GYM:
+-            logger.info("Using Isaac Gym (GPU-accelerated)")
+-            env = IsaacGymG1Environment(
+-                num_envs=base_config['environment']['num_envs'],
+-                device=device,
+-                terrain_config=terrain_config['terrains'][terrain_name],
+-                headless=headless
+-            )
+-        else:
+-            logger.warning("Isaac Gym not available. Using mock environment (slow, for testing only)")
+-            env = MockG1Environment(
+-                num_envs=4,  # Use fewer envs for mock
+-                device=device,
+-                terrain_config=terrain_config['terrains'][terrain_name]
+-            )
+-        logger.info(f"Environment created: {env.num_envs} parallel envs")
+-    except Exception as e:
+-        logger.error(f"Failed to create environment: {e}")
+-        logger.info("Please install Isaac Gym: https://developer.nvidia.com/isaac-gym")
+-        return
+-    
+-    # Get observation and action dimensions
+-    obs_dim = env.obs_dim
+-    action_dim = env.action_dim
+-    
+-    logger.info(f"Observation dim: {obs_dim}, Action dim: {action_dim}")
+-    
+-    # Create policy
+-    policy = SACPolicy(
+-        obs_dim=obs_dim,
+-        action_dim=action_dim,
+-        device=device,
+-        learning_rate=base_config['training']['learning_rate'],
+-        gamma=base_config['training']['gamma'],
+-        tau=base_config['training']['tau'],
+-        alpha_lr=base_config['training']['alpha_lr'],
+-        auto_entropy_tuning=base_config['training']['auto_entropy_tuning']
+-    )
+-    logger.info("SAC policy created")
+-    
+-    # Create replay buffer
+-    buffer = ReplayBuffer(
+-        buffer_size=base_config['training']['buffer_size'],
+-        obs_dim=obs_dim,
+-        action_dim=action_dim
+-    )
+-    logger.info(f"Replay buffer created (size: {base_config['training']['buffer_size']})")
+-    
+-    # Create trainer
+-    trainer = SACTrainer(policy, env, buffer, device=device)
+-    
+-    # Policy manager for saving
+-    policy_manager = PolicyManager()
+-    policy_manager.create_policy(terrain_name, obs_dim, action_dim)
+-    policy_manager.policies[terrain_name] = policy
+-    
+-    # Training loop
+-    logger.info("Starting training loop...")
+-    step = 0
+-    episode_rewards = []
+-    episode_reward = 0.0
+-    
+-    obs = env.reset()
+-    
+-    pbar = tqdm(total=num_steps, desc=f"Training {terrain_name}")
+-    
+-    while step < num_steps:
+-        # Collect experience
+-        action = policy.select_action(torch.FloatTensor(obs).to(device), deterministic=False)
+-        action = action.cpu().numpy()
+-        
+-        next_obs, rewards, dones, infos = env.step(action)
+-        
+-        # Store in replay buffer (per-environment)
+-        for i in range(env.num_envs):
+-            buffer.add(
+-                obs[i],
+-                action[i] if len(action.shape) > 1 else action,
+-                rewards[i],
+-                next_obs[i],
+-                dones[i]
+-            )
+-            
+-            episode_reward += rewards[i]
+-        
+-        obs = next_obs
+-        step += env.num_envs
+-        
+-        # Train on batch
+-        if buffer.size > base_config['training']['batch_size']:
+-            train_metrics = trainer.train_step(
+-                batch_size=base_config['training']['batch_size'],
+-                gamma=base_config['training']['gamma']
+-            )
+-        
+-        # Track episodes
+-        for done in dones:
+-            if done:
+-                episode_rewards.append(episode_reward)
+-                episode_reward = 0.0
+-        
+-        # Logging
+-        if step % base_config['training']['log_freq'] == 0:
+-            avg_reward = np.mean(episode_rewards[-100:]) if episode_rewards else 0
+-            pbar.set_postfix({"avg_reward": f"{avg_reward:.2f}"})
+-        
+-        # Evaluation and saving
+-        if step % base_config['training']['save_freq'] == 0:
+-            logger.info(f"Saving checkpoint at step {step}")
+-            policy_manager.save_policy(terrain_name, identifier=str(step))
+-            logger.info(f"Checkpoint saved: {step} steps")
+-        
+-        pbar.update(env.num_envs)
+-    
+-    pbar.close()
+-    
+-    # Final save
+-    logger.info("Training complete! Saving final policy...")
+-    policy_manager.save_policy(terrain_name, identifier="final")
+-    
+-    # Save config
+-    ConfigLoader.save(
+-        base_config,
+-        os.path.join("data/logs", f"config_{terrain_name}.yaml")
+-    )
+-    
+-    logger.info(f"Training finished for {terrain_name}")
+-    logger.info(f"Total episodes: {len(episode_rewards)}")
+-    logger.info(f"Average reward (last 100): {np.mean(episode_rewards[-100:]):.2f}")
+-    
+-    env.close()
+-
+-
+-def main():
+-    parser = argparse.ArgumentParser(description="Train G1 walking policy")
+-    parser.add_argument("--terrain", type=str, default="flat",
+-                       help="Terrain to train on (flat, rocky, slopes, stairs)")
+-    parser.add_argument("--config", type=str, default="configs/base_config.yaml",
+-                       help="Path to config file")
+-    parser.add_argument("--num-steps", type=int, default=1000000,
+-                       help="Number of training steps")
+-    parser.add_argument("--device", type=str, default="cuda:0",
+-                       help="Device to train on")
+-    parser.add_argument("--no-gui", action="store_true", default=True,
+-                       help="Run headless (no GUI)")
+-    
+-    args = parser.parse_args()
+-    
+-    train_single_terrain(
+-        args.terrain,
+-        args.config,
+-        args.num_steps,
+-        args.device,
+-        headless=args.no_gui
+-    )
+-
+-
+-if __name__ == "__main__":
+-    main()
+diff --git a/scripts/train_isaaclab_g1.py b/scripts/train_isaaclab_g1.py
+deleted file mode 100644
+index 51f58cb..0000000
+--- a/scripts/train_isaaclab_g1.py
++++ /dev/null
+@@ -1,100 +0,0 @@
+-#!/usr/bin/env python3
+-"""
+-Train G1 flat-terrain walking policy using Isaac Lab + PPO (rsl_rl).
+-
+-Usage:
+-    ./rl_unitree/bin/python scripts/train_isaaclab_g1.py --headless
+-    ./rl_unitree/bin/python scripts/train_isaaclab_g1.py --headless --num_envs 64
+-    ./rl_unitree/bin/python scripts/train_isaaclab_g1.py --task Isaac-Velocity-Rough-G1-v0 --headless
+-
+-Isaac Lab requires AppLauncher to start Isaac Sim before any sim-dependent imports.
+-"""
+-import argparse
+-
+-from isaaclab.app import AppLauncher
+-
+-parser = argparse.ArgumentParser(description="Train G1 walking in Isaac Lab")
+-parser.add_argument("--task", type=str, default="Isaac-Velocity-Flat-G1-v0",
+-                    choices=["Isaac-Velocity-Flat-G1-v0", "Isaac-Velocity-Rough-G1-v0"],
+-                    help="Isaac Lab task ID")
+-parser.add_argument("--num_envs", type=int, default=512,
+-                    help="Number of parallel envs (512 recommended; use 256 if OOM on 8GB VRAM)")
+-parser.add_argument("--max_iterations", type=int, default=None,
+-                    help="Override max training iterations from config")
+-parser.add_argument("--log_dir", type=str, default="data/isaaclab_logs",
+-                    help="Directory for checkpoints and logs")
+-parser.add_argument("--seed", type=int, default=42)
+-AppLauncher.add_app_launcher_args(parser)
+-args = parser.parse_args()
+-
+-# Launch Isaac Sim — must happen before any omni/carb/isaaclab sim imports
+-app_launcher = AppLauncher(args)
+-simulation_app = app_launcher.app
+-
+-# ── Everything below runs inside the Isaac Sim process ──────────────────────
+-import os
+-import gymnasium as gym
+-import torch
+-
+-import isaaclab_tasks  # registers all Isaac-* gym envs
+-from isaaclab.envs import DirectMARLEnv, multi_agent_to_single_agent
+-from isaaclab_rl.rsl_rl import RslRlVecEnvWrapper
+-from isaaclab_tasks.utils.parse_cfg import parse_env_cfg
+-
+-from rsl_rl.runners import OnPolicyRunner
+-
+-
+-def main():
+-    # ── Environment ──────────────────────────────────────────────────────────
+-    device = "cuda" if torch.cuda.is_available() else "cpu"
+-    print(f"[train] Task: {args.task}")
+-    print(f"[train] Envs: {args.num_envs}  |  Device: {device}")
+-
+-    env_cfg = parse_env_cfg(
+-        args.task,
+-        device=device,
+-        num_envs=args.num_envs,
+-    )
+-    env = gym.make(args.task, cfg=env_cfg)
+-
+-    if isinstance(env.unwrapped, DirectMARLEnv):
+-        env = multi_agent_to_single_agent(env)
+-
+-    env = RslRlVecEnvWrapper(env)
+-
+-    # ── PPO runner config (from the registered task) ─────────────────────────
+-    rsl_rl_cfg_entry = gym.spec(args.task).kwargs["rsl_rl_cfg_entry_point"]
+-    module_name, class_name = rsl_rl_cfg_entry.rsplit(":", 1)
+-    import importlib
+-    cfg_module = importlib.import_module(module_name)
+-    runner_cfg = getattr(cfg_module, class_name)()
+-
+-    if args.max_iterations is not None:
+-        runner_cfg.max_iterations = args.max_iterations
+-
+-    from datetime import datetime
+-    run_name = f"{args.task.replace('Isaac-Velocity-', '').replace('-v0', '').lower()}_envs{args.num_envs}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+-    run_dir = os.path.join(args.log_dir, run_name)
+-    os.makedirs(run_dir, exist_ok=True)
+-    print(f"[train] Logging to {run_dir}")
+-
+-    # ── Train ─────────────────────────────────────────────────────────────────
+-    runner = OnPolicyRunner(
+-        env,
+-        runner_cfg.to_dict(),
+-        log_dir=run_dir,
+-        device=device,
+-    )
+-    runner.learn(num_learning_iterations=runner_cfg.max_iterations, init_at_random_ep_len=True)
+-
+-    # ── Save final policy ─────────────────────────────────────────────────────
+-    final_path = os.path.join(run_dir, f"g1_flat_final.pt")
+-    runner.save(final_path)
+-    print(f"[train] Saved final policy to {final_path}")
+-
+-    env.close()
+-
+-
+-if __name__ == "__main__":
+-    main()
+-    simulation_app.close()
+diff --git a/scripts/verify_isaaclab.py b/scripts/verify_isaaclab.py
+deleted file mode 100644
+index ecea444..0000000
+--- a/scripts/verify_isaaclab.py
++++ /dev/null
+@@ -1,39 +0,0 @@
+-#!/usr/bin/env python3
+-"""
+-Verify Isaac Lab install before training.
+-Run this after completing all pip installs.
+-
+-Usage:
+-    ./rl_unitree/bin/python scripts/verify_isaaclab.py
+-"""
+-import sys
+-
+-errors = []
+-
+-def check(label, fn):
+-    try:
+-        result = fn()
+-        print(f"  [OK]  {label}" + (f": {result}" if result else ""))
+-    except Exception as e:
+-        print(f"  [FAIL] {label}: {e}")
+-        errors.append(label)
+-
+-print("\n=== Isaac Lab environment check ===\n")
+-
+-check("torch + CUDA", lambda: __import__("torch").cuda.get_device_name(0))
+-check("isaacsim importable", lambda: __import__("isaacsim"))
+-check("isaaclab_rl importable", lambda: __import__("isaaclab_rl"))
+-check("rsl_rl importable", lambda: __import__("rsl_rl"))
+-
+-# isaaclab_tasks / isaaclab_assets / isaaclab.envs require the Isaac Sim app
+-# (AppLauncher) to be running — they cannot be imported standalone.
+-print("  [NOTE] isaaclab_tasks + isaaclab_assets require AppLauncher; verified at runtime.")
+-
+-print()
+-if errors:
+-    print(f"[!] {len(errors)} issue(s) found: {errors}")
+-    sys.exit(1)
+-else:
+-    print("[✓] All checks passed. Ready to train.\n")
+-    print("Run training with:")
+-    print("  ./rl_unitree/bin/python scripts/train_isaaclab_g1.py --headless --num_envs 64\n")
+diff --git a/scripts/visualize_g1.py b/scripts/visualize_g1.py
+deleted file mode 100644
+index d9b3e2e..0000000
+--- a/scripts/visualize_g1.py
++++ /dev/null
+@@ -1,219 +0,0 @@
+-#!/usr/bin/env python3
+-"""
+-Replay a saved G1 trajectory in MuJoCo (no Isaac Sim / no RTX renderer needed).
+-
+-Usage:
+-    # Interactive viewer (requires a display)
+-    ./rl_unitree/bin/python scripts/visualize_g1.py --traj data/isaaclab_logs/trajectory.npz
+-
+-    # Render to mp4 without a display
+-    ./rl_unitree/bin/python scripts/visualize_g1.py --traj data/isaaclab_logs/trajectory.npz --video
+-
+-    # Control render resolution / fps
+-    ./rl_unitree/bin/python scripts/visualize_g1.py --traj data/isaaclab_logs/trajectory.npz --video --width 1280 --height 720 --fps 50
+-"""
+-import argparse
+-import os
+-import sys
+-import time
+-
+-import numpy as np
+-import mujoco
+-from robot_descriptions import g1_mj_description
+-
+-parser = argparse.ArgumentParser(description="Replay G1 trajectory in MuJoCo")
+-parser.add_argument("--traj", type=str, default="data/isaaclab_logs/trajectory.npz",
+-                    help="Trajectory npz produced by play_g1.py")
+-parser.add_argument("--video", action="store_true",
+-                    help="Render frames to disk instead of opening the viewer")
+-parser.add_argument("--out", type=str, default="g1_policy.mp4",
+-                    help="Output video file (requires ffmpeg)")
+-parser.add_argument("--width",  type=int, default=1280)
+-parser.add_argument("--height", type=int, default=720)
+-parser.add_argument("--fps",    type=int, default=50,
+-                    help="Playback fps (Isaac Lab default sim dt 0.02 s → 50 Hz)")
+-parser.add_argument("--cam_distance", type=float, default=3.0)
+-parser.add_argument("--cam_elevation", type=float, default=-20.0)
+-args = parser.parse_args()
+-
+-# ── Load trajectory ───────────────────────────────────────────────────────────
+-if not os.path.exists(args.traj):
+-    sys.exit(f"Trajectory file not found: {args.traj}\n"
+-             "Run play_g1.py first: ./rl_unitree/bin/python scripts/play_g1.py --headless")
+-
+-traj = np.load(args.traj, allow_pickle=True)
+-isaac_joint_names = list(traj["joint_names"])   # list[str]
+-joint_pos_traj    = traj["joint_pos"]            # (T, n_joints)
+-root_pos_traj     = traj["root_pos"]             # (T, 3)  xyz world
+-root_quat_traj    = traj["root_quat"]            # (T, 4)  wxyz (Isaac Lab / MuJoCo convention)
+-T = joint_pos_traj.shape[0]
+-print(f"[viz] Loaded {T} steps, {len(isaac_joint_names)} Isaac Lab joints")
+-
+-# ── Load MuJoCo model ─────────────────────────────────────────────────────────
+-# Patch the MJCF to set the offscreen framebuffer to the requested render size.
+-# MuJoCo's default is 640×480; anything larger raises ValueError unless we set it.
+-# We write a patched copy next to the original so relative mesh paths still work.
+-import tempfile
+-
+-mjcf_dir  = os.path.dirname(g1_mj_description.MJCF_PATH)
+-mjcf_name = os.path.basename(g1_mj_description.MJCF_PATH)
+-
+-with open(g1_mj_description.MJCF_PATH, "r") as f:
+-    xml_str = f.read()
+-
+-visual_insert = f'<global offwidth="{args.width}" offheight="{args.height}"/>'
+-if "<visual>" in xml_str:
+-    xml_str = xml_str.replace("<visual>", f"<visual>{visual_insert}", 1)
+-else:
+-    xml_str = xml_str.replace("<worldbody>",
+-                               f"<visual>{visual_insert}</visual>\n  <worldbody>", 1)
+-
+-# Add floor, lights, and skybox — the menagerie MJCF ships with none of these.
+-env_inject = """
+-  <asset>
+-    <texture name="grid" type="2d" builtin="checker" width="512" height="512"
+-             rgb1="0.4 0.4 0.4" rgb2="0.6 0.6 0.6"/>
+-    <material name="floor_mat" texture="grid" texrepeat="4 4" reflectance="0.1"/>
+-    <texture name="sky" type="skybox" builtin="gradient"
+-             rgb1="0.53 0.80 0.98" rgb2="0.15 0.45 0.78" width="512" height="512"/>
+-  </asset>
+-"""
+-world_inject = """
+-    <geom name="floor" type="plane" size="20 20 0.1" material="floor_mat" condim="3"/>
+-    <light name="sun" directional="true" pos="0 0 8" dir="0.2 0.2 -1"
+-           diffuse="0.9 0.9 0.9" specular="0.2 0.2 0.2" castshadow="true"/>
+-    <light name="fill" directional="true" pos="0 0 4" dir="-0.2 -0.2 -0.8"
+-           diffuse="0.3 0.3 0.3" specular="0 0 0" castshadow="false"/>
+-"""
+-# Insert asset block before </mujoco> and inject world elements after <worldbody>
+-xml_str = xml_str.replace("</mujoco>", f"{env_inject}\n</mujoco>", 1)
+-xml_str = xml_str.replace("<worldbody>", f"<worldbody>{world_inject}", 1)
+-
+-patched_path = os.path.join(mjcf_dir, f"_patched_{mjcf_name}")
+-with open(patched_path, "w") as f:
+-    f.write(xml_str)
+-
+-try:
+-    model = mujoco.MjModel.from_xml_path(patched_path)
+-finally:
+-    os.remove(patched_path)
+-
+-data  = mujoco.MjData(model)
+-print(f"[viz] MuJoCo model: {model.njnt} joints, nq={model.nq}")
+-
+-# Build name → (isaac_idx, mujoco_qpos_addr) mapping
+-isaac_name_to_idx = {n: i for i, n in enumerate(isaac_joint_names)}
+-joint_map = []  # list of (isaac_idx, mujoco_qpos_addr)
+-for j in range(model.njnt):
+-    mj_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, j)
+-    if mj_name == "floating_base_joint":
+-        continue
+-    if mj_name in isaac_name_to_idx:
+-        joint_map.append((isaac_name_to_idx[mj_name], model.jnt_qposadr[j]))
+-
+-print(f"[viz] Mapped {len(joint_map)} joints between Isaac Lab and MuJoCo")
+-unmapped_mj = []
+-for j in range(model.njnt):
+-    mj_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, j)
+-    if mj_name != "floating_base_joint" and mj_name not in isaac_name_to_idx:
+-        unmapped_mj.append(mj_name)
+-if unmapped_mj:
+-    print(f"[viz] MuJoCo joints held at default pose (no Isaac Lab match): {unmapped_mj}")
+-
+-
+-def apply_frame(step: int):
+-    """Write Isaac Lab trajectory frame into MuJoCo qpos/qvel."""
+-    # Root pose via freejoint: qpos[0:3]=xyz, qpos[3:7]=wxyz
+-    data.qpos[0:3] = root_pos_traj[step]
+-    data.qpos[3:7] = root_quat_traj[step]
+-    # Named joints
+-    for isaac_idx, qpos_adr in joint_map:
+-        data.qpos[qpos_adr] = joint_pos_traj[step, isaac_idx]
+-    data.qvel[:] = 0.0
+-    mujoco.mj_forward(model, data)
+-
+-
+-# ── Render video ──────────────────────────────────────────────────────────────
+-if args.video:
+-    import subprocess, tempfile, shutil
+-
+-    if not shutil.which("ffmpeg"):
+-        sys.exit("[viz] ffmpeg not found — install it with: sudo apt install ffmpeg")
+-
+-    frames_dir = tempfile.mkdtemp(prefix="g1_frames_")
+-    renderer = mujoco.Renderer(model, height=args.height, width=args.width)
+-
+-    # Position camera to track robot
+-    renderer.update_scene(data, camera=-1)  # use free camera
+-    scene_opt = mujoco.MjvOption()
+-    cam = mujoco.MjvCamera()
+-    cam.type   = mujoco.mjtCamera.mjCAMERA_FREE
+-    cam.lookat = np.array([0.0, 0.0, 0.8])
+-    cam.distance    = args.cam_distance
+-    cam.elevation   = args.cam_elevation
+-    cam.azimuth     = 135.0
+-
+-    print(f"[viz] Rendering {T} frames to {frames_dir} ...")
+-    for step in range(T):
+-        apply_frame(step)
+-        # Track robot position
+-        cam.lookat[0] = root_pos_traj[step, 0]
+-        cam.lookat[1] = root_pos_traj[step, 1]
+-        cam.lookat[2] = root_pos_traj[step, 2] + 0.5
+-        renderer.update_scene(data, camera=cam, scene_option=scene_opt)
+-        rgb = renderer.render()
+-        frame_path = os.path.join(frames_dir, f"frame_{step:05d}.png")
+-        import PIL.Image
+-        PIL.Image.fromarray(rgb).save(frame_path)
+-        if step % 100 == 0:
+-            print(f"[viz] Frame {step}/{T}")
+-
+-    renderer.close()
+-    print(f"[viz] Encoding video with ffmpeg ...")
+-    cmd = [
+-        "ffmpeg", "-y",
+-        "-r", str(args.fps),
+-        "-i", os.path.join(frames_dir, "frame_%05d.png"),
+-        "-c:v", "libx264",
+-        "-pix_fmt", "yuv420p",
+-        "-preset", "fast",
+-        args.out,
+-    ]
+-    subprocess.run(cmd, check=True)
+-    shutil.rmtree(frames_dir)
+-    print(f"[viz] Video saved to {args.out}")
+-
+-# ── Interactive viewer ────────────────────────────────────────────────────────
+-else:
+-    try:
+-        import mujoco.viewer
+-    except ImportError:
+-        sys.exit("[viz] mujoco.viewer not available. Try --video instead.")
+-
+-    step_duration = 1.0 / args.fps
+-    print(f"[viz] Opening MuJoCo viewer — press ESC or close window to exit")
+-    print(f"[viz] Playing back {T} steps at {args.fps} fps ({T/args.fps:.1f} s)")
+-
+-    with mujoco.viewer.launch_passive(model, data) as viewer:
+-        # Initial camera position
+-        viewer.cam.lookat = np.array([0.0, 0.0, 0.8])
+-        viewer.cam.distance = args.cam_distance
+-        viewer.cam.elevation = args.cam_elevation
+-        viewer.cam.azimuth = 135.0
+-
+-        for step in range(T):
+-            if not viewer.is_running():
+-                break
+-            t0 = time.perf_counter()
+-            apply_frame(step)
+-            # Track robot
+-            viewer.cam.lookat[0] = root_pos_traj[step, 0]
+-            viewer.cam.lookat[1] = root_pos_traj[step, 1]
+-            viewer.cam.lookat[2] = root_pos_traj[step, 2] + 0.5
+-            viewer.sync()
+-            elapsed = time.perf_counter() - t0
+-            remaining = step_duration - elapsed
+-            if remaining > 0:
+-                time.sleep(remaining)
+-
+-        print("[viz] Playback finished")
+diff --git a/training/__init__.py b/training/__init__.py
+index 27d7f37..8b13789 100644
+--- a/training/__init__.py
++++ b/training/__init__.py
+@@ -1,7 +1 @@
+-"""
+-Training utilities for SAC
+-"""
+-from .replay_buffer import ReplayBuffer
+-from .sac_trainer import SACTrainer
+ 
+-__all__ = ["ReplayBuffer", "SACTrainer"]
+diff --git a/training/replay_buffer.py b/training/replay_buffer.py
+deleted file mode 100644
+index 4c14c6d..0000000
+--- a/training/replay_buffer.py
++++ /dev/null
+@@ -1,89 +0,0 @@
+-"""
+-Replay buffer for SAC training
+-"""
+-import numpy as np
+-from typing import Tuple
+-
+-
+-class ReplayBuffer:
+-    """
+-    Experience replay buffer for off-policy RL algorithms
+-    """
+-    
+-    def __init__(self,
+-                 buffer_size: int = 1000000,
+-                 obs_dim: int = None,
+-                 action_dim: int = None):
+-        """
+-        Initialize replay buffer
+-        
+-        Args:
+-            buffer_size: Maximum number of transitions to store
+-            obs_dim: Observation dimension
+-            action_dim: Action dimension
+-        """
+-        self.buffer_size = buffer_size
+-        self.obs_dim = obs_dim
+-        self.action_dim = action_dim
+-        self.idx = 0
+-        self.size = 0
+-        
+-        # Pre-allocate arrays
+-        if obs_dim is not None and action_dim is not None:
+-            self.observations = np.zeros((buffer_size, obs_dim), dtype=np.float32)
+-            self.next_observations = np.zeros((buffer_size, obs_dim), dtype=np.float32)
+-            self.actions = np.zeros((buffer_size, action_dim), dtype=np.float32)
+-            self.rewards = np.zeros(buffer_size, dtype=np.float32)
+-            self.dones = np.zeros(buffer_size, dtype=np.bool_)
+-    
+-    def add(self,
+-            obs: np.ndarray,
+-            action: np.ndarray,
+-            reward: float,
+-            next_obs: np.ndarray,
+-            done: bool):
+-        """
+-        Add transition to buffer
+-        
+-        Args:
+-            obs: Current observation
+-            action: Action taken
+-            reward: Reward received
+-            next_obs: Next observation
+-            done: Whether episode ended
+-        """
+-        self.observations[self.idx] = obs
+-        self.actions[self.idx] = action
+-        self.rewards[self.idx] = reward
+-        self.next_observations[self.idx] = next_obs
+-        self.dones[self.idx] = done
+-        
+-        self.idx = (self.idx + 1) % self.buffer_size
+-        self.size = min(self.size + 1, self.buffer_size)
+-    
+-    def sample(self, batch_size: int = 256) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+-        """
+-        Sample random batch from buffer
+-        
+-        Args:
+-            batch_size: Size of batch to sample
+-            
+-        Returns:
+-            obs, actions, rewards, next_obs, dones
+-        """
+-        if self.size == 0:
+-            raise RuntimeError("Cannot sample from empty buffer")
+-        
+-        indices = np.random.randint(0, self.size, size=batch_size)
+-        
+-        return (
+-            self.observations[indices],
+-            self.actions[indices],
+-            self.rewards[indices],
+-            self.next_observations[indices],
+-            self.dones[indices]
+-        )
+-    
+-    def is_full(self) -> bool:
+-        """Check if buffer is full"""
+-        return self.size == self.buffer_size
+diff --git a/training/sac_trainer.py b/training/sac_trainer.py
+deleted file mode 100644
+index 8b1af80..0000000
+--- a/training/sac_trainer.py
++++ /dev/null
+@@ -1,160 +0,0 @@
+-"""
+-SAC training loop
+-"""
+-import torch
+-import torch.nn.functional as F
+-from typing import Dict, Tuple
+-from tqdm import tqdm
+-
+-
+-class SACTrainer:
+-    """
+-    Soft Actor-Critic trainer
+-    
+-    Implements the SAC algorithm for continuous control
+-    """
+-    
+-    def __init__(self,
+-                 policy,
+-                 env,
+-                 replay_buffer,
+-                 device: str = "cuda:0"):
+-        """
+-        Initialize SAC trainer
+-        
+-        Args:
+-            policy: SACPolicy instance
+-            env: Training environment
+-            replay_buffer: ReplayBuffer instance
+-            device: Device to train on
+-        """
+-        self.policy = policy
+-        self.env = env
+-        self.buffer = replay_buffer
+-        self.device = device
+-    
+-    def train_step(self,
+-                   batch_size: int = 256,
+-                   gamma: float = 0.99) -> Dict[str, float]:
+-        """
+-        Perform one training step (update on batch)
+-        
+-        Args:
+-            batch_size: Batch size for training
+-            gamma: Discount factor
+-            
+-        Returns:
+-            Dictionary with training metrics
+-        """
+-        if self.buffer.size < batch_size:
+-            return {}
+-        
+-        # Sample batch
+-        obs, actions, rewards, next_obs, dones = self.buffer.sample(batch_size)
+-        
+-        obs = torch.FloatTensor(obs).to(self.device)
+-        actions = torch.FloatTensor(actions).to(self.device)
+-        rewards = torch.FloatTensor(rewards).unsqueeze(1).to(self.device)
+-        next_obs = torch.FloatTensor(next_obs).to(self.device)
+-        dones = torch.FloatTensor(dones).unsqueeze(1).to(self.device)
+-        
+-        # Update Q-networks
+-        with torch.no_grad():
+-            next_mu, next_log_std = self.policy.actor(next_obs)
+-            next_std = next_log_std.exp()
+-            next_z = torch.randn_like(next_std)
+-            next_action = torch.tanh(next_mu + next_std * next_z)
+-            
+-            next_q1 = self.policy.q1_target(next_obs, next_action)
+-            next_q2 = self.policy.q2_target(next_obs, next_action)
+-            next_q = torch.min(next_q1, next_q2)
+-            
+-            target_q = rewards + (1 - dones) * gamma * next_q
+-        
+-        q1_loss = F.mse_loss(self.policy.q1(obs, actions), target_q)
+-        q2_loss = F.mse_loss(self.policy.q2(obs, actions), target_q)
+-        
+-        self.policy.q1_opt.zero_grad()
+-        q1_loss.backward()
+-        self.policy.q1_opt.step()
+-        
+-        self.policy.q2_opt.zero_grad()
+-        q2_loss.backward()
+-        self.policy.q2_opt.step()
+-        
+-        # Update actor
+-        mu, log_std = self.policy.actor(obs)
+-        std = log_std.exp()
+-        z = torch.randn_like(std)
+-        action = torch.tanh(mu + std * z)
+-        
+-        q1_pi = self.policy.q1(obs, action)
+-        q2_pi = self.policy.q2(obs, action)
+-        q_pi = torch.min(q1_pi, q2_pi)
+-        
+-        actor_loss = (self.policy.alpha * (-torch.log(std + 1e-6).sum(dim=1, keepdim=True)) - q_pi).mean()
+-        
+-        self.policy.actor_opt.zero_grad()
+-        actor_loss.backward()
+-        self.policy.actor_opt.step()
+-        
+-        # Update entropy coefficient
+-        if self.policy.auto_entropy_tuning:
+-            entropy = -torch.log(std + 1e-6).sum(dim=1, keepdim=True)
+-            alpha_loss = -(self.policy.log_alpha * (entropy + self.policy.target_entropy).detach()).mean()
+-            
+-            self.policy.alpha_opt.zero_grad()
+-            alpha_loss.backward()
+-            self.policy.alpha_opt.step()
+-        
+-        # Soft update target networks
+-        for param, target_param in zip(self.policy.q1.parameters(), self.policy.q1_target.parameters()):
+-            target_param.data.copy_(self.policy.tau * param.data + (1 - self.policy.tau) * target_param.data)
+-        
+-        for param, target_param in zip(self.policy.q2.parameters(), self.policy.q2_target.parameters()):
+-            target_param.data.copy_(self.policy.tau * param.data + (1 - self.policy.tau) * target_param.data)
+-        
+-        return {
+-            'q1_loss': q1_loss.item(),
+-            'q2_loss': q2_loss.item(),
+-            'actor_loss': actor_loss.item(),
+-            'alpha': self.policy.alpha.item(),
+-        }
+-    
+-    def collect_experience(self, num_steps: int) -> Dict[str, float]:
+-        """
+-        Collect experience in environment
+-        
+-        Args:
+-            num_steps: Number of environment steps to collect
+-            
+-        Returns:
+-            Dictionary with collection metrics
+-        """
+-        obs = self.env.reset()
+-        episode_reward = 0.0
+-        num_episodes = 0
+-        
+-        for _ in range(num_steps):
+-            # Select action
+-            obs_tensor = torch.FloatTensor(obs).unsqueeze(0).to(self.device)
+-            with torch.no_grad():
+-                action = self.policy.select_action(obs_tensor, deterministic=False)
+-            action = action.cpu().numpy()[0]
+-            
+-            # Step environment
+-            next_obs, reward, done, info = self.env.step(action)
+-            self.buffer.add(obs, action, reward, next_obs, done)
+-            
+-            episode_reward += reward
+-            obs = next_obs
+-            
+-            if done:
+-                num_episodes += 1
+-                obs = self.env.reset()
+-                episode_reward = 0.0
+-        
+-        return {
+-            'episodes_collected': num_episodes,
+-            'steps_collected': num_steps,
+-        }
