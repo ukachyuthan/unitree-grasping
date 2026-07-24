@@ -199,7 +199,7 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
     lift_height_m: float    = 0.15
     grasp_reach_thresh: float = 0.06
     kinematic_grasp: bool = False
-    contact_force_thresh: float = 0.05
+    contact_force_thresh: float = 0.01   # lowered: GPU parallel physics can miss 0.05 N contacts
     min_contact_fingers: int   = 2
     # Top-down: fingers hang below palm — negative z offset raises hand above object.
     grasp_point_offset: tuple = (0.0, 0.0, -0.10)
@@ -244,14 +244,22 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
     ik_orient_yaw_to_object: bool = True
 
     # ── Pick-and-place task mode ───────────────────────────────────────────────
-    # 0.0 = all lift-only (default); 0.5 = 50% episodes are pick-and-place.
-    # Transport/lower/open phases always run but hold pose in lift-only mode.
-    task_mode_prob_place: float = 0.0
+    # 0.5 = 50% episodes are pick-and-place, 50% lift-only.
+    # Transport/lower/open phases always run; lift-only episodes hold pose during them.
+    # The destination "box" is NOT in the sim — no USD asset, not in point cloud.
+    # It is parameterised purely as a goal position + target wrist orientation so
+    # the perception pipeline only ever needs to see the grasped object.
+    task_mode_prob_place: float = 0.5
     place_goal_x_range: tuple = (0.35, 0.65)
     place_goal_y_range: tuple = (-0.25, 0.25)
-    place_height_above_table: float = 0.02   # target z when lowering for placement
-    place_reward_weight: float = 1.0         # additive with lift reward in place mode
+    place_height_above_table: float = 0.02   # target z when lowering
+    place_reward_weight: float = 1.0
     place_sigma_m: float = 0.06              # exp(-dist/sigma) for place reward
+    # Per-episode wrist orientation target during transport — simulates placing into
+    # a container that may be angled.  Wrist smoothly rotates over N_TRANSPORT steps
+    # so the grasp must learn grasps resilient to reorientation; no physical box needed.
+    place_wrist_roll_range: tuple = (-1.57, 1.57)   # ±90° jaw rotation
+    place_wrist_tilt_range: tuple = (-0.8,   0.8)   # ±46° wrist pitch
 
     # ── Contact-area reward ────────────────────────────────────────────────────
     # Bilateral finger coverage: min(left_pts, right_pts) / N_PC near each fingertip.
