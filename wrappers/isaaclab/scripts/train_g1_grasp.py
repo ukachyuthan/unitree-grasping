@@ -29,6 +29,9 @@ parser.add_argument("--joint_space", action="store_true",
                     help="Use joint-space control (no IK). Simpler, good for first training run.")
 parser.add_argument("--num_pc_points", type=int, default=128)
 parser.add_argument("--pc_embed_dim",  type=int, default=128)
+parser.add_argument("--use_real_objects", type=lambda s: s.lower() != "false", default=True,
+                    help="Include real (YCB-derived) objects alongside procedural shapes. "
+                         "Pass --use_real_objects false to reproduce the original RNG-only run.")
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 
@@ -101,6 +104,8 @@ def main():
     # ── Environment ──────────────────────────────────────────────────────────
     env_cfg = G1GraspEnvCfg()
     env_cfg.scene.num_envs = args.num_envs
+    env_cfg.use_real_objects = args.use_real_objects
+    print(f"[grasp-train] use_real_objects={args.use_real_objects}")
     # --joint_space flag forces joint-space; cfg default is already True so only override when explicitly set
     if args.joint_space:
         env_cfg.use_joint_space_control = True

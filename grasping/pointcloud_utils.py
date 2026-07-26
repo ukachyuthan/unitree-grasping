@@ -117,6 +117,66 @@ def transform_pointcloud(
     return transformed if batched else transformed.squeeze(0)
 
 
+def add_sensor_noise(
+    pointcloud: torch.Tensor,     # (B, N, 3) object/robot-local frame
+    gaussian_std: torch.Tensor | float = 0.0,     # (B,) or scalar, metres
+    dropout_frac: torch.Tensor | float = 0.0,     # (B,) or scalar, in [0, 1)
+    outlier_frac: torch.Tensor | float = 0.0,      # (B,) or scalar, in [0, 1)
+    outlier_std: float = 0.03,                     # metres — outlier displacement scale
+) -> torch.Tensor:                # (B, N, 3)
+    """
+    Depth-sensor-realistic point cloud noise: Gaussian jitter + dropout + outliers.
+
+    Real depth sensors (RealSense/ZED) don't just jitter points — they drop
+    points entirely on dark/reflective/thin surfaces (dropout) and produce
+    spurious far-off points at depth discontinuities/multipath (outliers).
+    Gaussian noise alone (the previous `_PC_NOISE_M` behaviour) under-models
+    both. Per-call severity is typically drawn per-episode by the caller
+    (domain randomization), not fixed — pass tensors for per-env severity.
+
+    Dropped points are resampled (with replacement) from the surviving points
+    in the same cloud so point count stays fixed (required for downstream
+    fixed-size PointNet input); if every point in an env is dropped, that
+    env's points are left as-is (only Gaussian-jittered) rather than resampled
+    from nothing.
+    """
+    B, N, _ = pointcloud.shape
+    device  = pointcloud.device
+
+    def _as_per_env(x) -> torch.Tensor:
+        if torch.is_tensor(x):
+            return x.to(device).view(B, 1)
+        return torch.full((B, 1), float(x), device=device)
+
+    std     = _as_per_env(gaussian_std)
+    drop_p  = _as_per_env(dropout_frac).clamp(0.0, 0.999)
+    out_p   = _as_per_env(outlier_frac).clamp(0.0, 1.0)
+
+    pc = pointcloud + torch.randn_like(pointcloud) * std.unsqueeze(-1)
+
+    # ── Dropout: zero-mask a random fraction, resample from survivors ──────
+    drop_mask = torch.rand(B, N, device=device) < drop_p          # (B, N) True = dropped
+    n_valid   = (~drop_mask).sum(dim=-1)                          # (B,)
+
+    if drop_mask.any() and (n_valid > 0).any():
+        # Sort each row so surviving (non-dropped) points come first; ties broken randomly.
+        scores = torch.where(drop_mask, torch.zeros(B, N, device=device), torch.rand(B, N, device=device) + 1.0)
+        order = scores.argsort(dim=-1, descending=True)           # (B, N) — first n_valid[b] are survivors
+        safe_n_valid = n_valid.clamp(min=1).unsqueeze(-1)         # (B, 1) avoid mod-by-zero
+        pick = torch.randint(0, N, (B, N), device=device) % safe_n_valid   # index within [0, n_valid)
+        fill_src = order.gather(1, pick)                          # (B, N) original index of a random survivor
+        replacement = pc.gather(1, fill_src.unsqueeze(-1).expand(-1, -1, 3))
+        apply = drop_mask & (n_valid > 0).unsqueeze(-1)           # skip resample where every point was dropped
+        pc = torch.where(apply.unsqueeze(-1), replacement, pc)
+
+    # ── Outliers: displace a random fraction far from the surface ──────────
+    outlier_mask = torch.rand(B, N, device=device) < out_p
+    if outlier_mask.any():
+        pc = pc + outlier_mask.unsqueeze(-1).float() * torch.randn_like(pc) * outlier_std
+
+    return pc
+
+
 def farthest_point_sample(
     pointcloud: torch.Tensor,   # (B, N, 3)
     num_samples: int,

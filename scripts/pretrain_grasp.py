@@ -44,38 +44,64 @@ class GraspDataset(Dataset):
     """
 
     def __init__(self, data_dir: str, n_pts: int = 128, n_grasp: int = 10,
-                 augment: bool = True):
+                 augment: bool = True, label_source: str = "antipodal"):
+        """
+        label_source:
+            "antipodal" — geometric labels from generate_meshes.py / generate_ycb_meshes.py
+                          (compute_antipodal_grasps), default, works everywhere.
+            "graspnet"  — learned labels from generate_graspnet_labels.py only; samples
+                          without a _graspnet.json are skipped.
+            "both"      — blend both label pools per sample, take top-n_grasp by quality
+                          across the combined set.
+        """
         self.n_pts    = n_pts
         self.n_grasp  = n_grasp
         self.augment  = augment
-        self.samples  = []   # list of (pc_path, grasps_path)
+        self.label_source = label_source
+        self.samples  = []   # list of (pc_path, grasps_path | None, graspnet_path | None)
 
         for pc_path in sorted(glob.glob(os.path.join(data_dir, "**/*_pc.npy"),
                                          recursive=True)):
-            base   = pc_path.replace("_pc.npy", "")
-            g_path = base + "_grasps.json"
-            if os.path.exists(g_path):
-                self.samples.append((pc_path, g_path))
+            base    = pc_path.replace("_pc.npy", "")
+            g_path  = base + "_grasps.json"
+            gn_path = base + "_graspnet.json"
+            has_g   = os.path.exists(g_path)
+            has_gn  = os.path.exists(gn_path)
+
+            if label_source == "antipodal" and has_g:
+                self.samples.append((pc_path, g_path, None))
+            elif label_source == "graspnet" and has_gn:
+                self.samples.append((pc_path, None, gn_path))
+            elif label_source == "both" and (has_g or has_gn):
+                self.samples.append((pc_path, g_path if has_g else None, gn_path if has_gn else None))
 
         if not self.samples:
-            raise RuntimeError(f"No (pc, grasp) pairs found under {data_dir}")
-        print(f"[GraspDataset] {len(self.samples)} samples in {data_dir}")
+            raise RuntimeError(
+                f"No (pc, grasp) pairs found under {data_dir} for label_source={label_source}"
+            )
+        print(f"[GraspDataset] {len(self.samples)} samples in {data_dir} "
+              f"(label_source={label_source})")
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        pc_path, g_path = self.samples[idx]
+        pc_path, g_path, gn_path = self.samples[idx]
 
         # Load pre-sampled PC (512, 3) and sub-sample to n_pts
         pc_full = np.load(pc_path).astype(np.float32)  # (512, 3)
         chosen  = np.random.choice(len(pc_full), self.n_pts, replace=False)
         pc      = pc_full[chosen]   # (n_pts, 3)
 
-        # Load grasp centers (take top-n_grasp by quality)
-        with open(g_path) as f:
-            data = json.load(f)
-        grasp_list = data["grasps"] if isinstance(data, dict) else data
+        # Load grasp centers (take top-n_grasp by quality across whichever
+        # label file(s) are active for this dataset's label_source)
+        grasp_list = []
+        for path in (g_path, gn_path):
+            if path is None:
+                continue
+            with open(path) as f:
+                data = json.load(f)
+            grasp_list += data["grasps"] if isinstance(data, dict) else data
         grasps  = sorted(grasp_list, key=lambda g: g["quality"], reverse=True)
         grasps  = grasps[:self.n_grasp]
         centers = np.array([g["center"] for g in grasps], dtype=np.float32)
@@ -128,7 +154,7 @@ def train(args):
     print(f"[pretrain] device={device}")
 
     dataset = GraspDataset(args.data, n_pts=args.n_pts, n_grasp=args.n_grasp,
-                           augment=not args.no_augment)
+                           augment=not args.no_augment, label_source=args.label_source)
     loader  = DataLoader(dataset, batch_size=args.batch, shuffle=True,
                          num_workers=2, pin_memory=(device.type == "cuda"))
 
@@ -208,6 +234,9 @@ def main():
     p.add_argument("--n_grasp",     type=int,   default=10)
     p.add_argument("--embed_dim",   type=int,   default=128)
     p.add_argument("--no_augment",  action="store_true")
+    p.add_argument("--label_source", type=str, default="antipodal",
+                   choices=["antipodal", "graspnet", "both"],
+                   help="Which grasp labels to train against (see GraspDataset docstring)")
     args = p.parse_args()
     train(args)
 
