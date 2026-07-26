@@ -15,6 +15,7 @@ Everything else is scripted. This is the "Path A" architecture.
 
 from __future__ import annotations
 
+import json
 import math
 import numpy as np
 import torch
@@ -35,11 +36,13 @@ from isaaclab.assets import Articulation, RigidObject
 from isaaclab.sensors import ContactSensor, ContactSensorCfg, TiledCamera, TiledCameraCfg
 
 from envs._paths import data_path
+from envs._object_registry import PROCEDURAL_SHAPE_NAMES, ycb_shape_names, shape_split
 from envs.grasp_pose_env_cfg import (
     GraspPoseEnvCfg,
     N_APPROACH, N_CLOSE, N_LIFT, N_HOLD, N_TRANSPORT, N_LOWER, N_OPEN, EXEC_STEPS,
     NUM_PC_POINTS,
 )
+from grasping.pointcloud_utils import add_sensor_noise
 
 
 def _smoothstep(t: float) -> float:
@@ -48,14 +51,7 @@ def _smoothstep(t: float) -> float:
     return t * t * (3.0 - 2.0 * t)
 
 
-_SHAPE_NAMES = [
-    "torus", "l_shape", "t_shape", "c_shape", "dumbbell",
-    "wedge", "star_prism", "bracket", "stepped_cyl",
-    "twisted_bar", "irregular_ext", "convex_hull",
-]
-NUM_SHAPES  = len(_SHAPE_NAMES)
 _PC_PRE_N   = 512   # points pre-sampled per shape on disk
-_PC_NOISE_M = 0.003  # 3 mm Gaussian noise on point cloud
 
 
 class GraspPoseEnv(DirectRLEnv):
@@ -93,9 +89,11 @@ class GraspPoseEnv(DirectRLEnv):
         self._home_ee_quat = self._robot.data.body_quat_w[:, self._ee_body_idx].clone()  # (B, 4)
 
         # ── Pre-load object point clouds ──────────────────────────────────────
+        # self._shape_names / self._num_shapes were set in _setup_scene() (called
+        # inside super().__init__() above) so self._objs already matches this order.
         pcs = []
-        for name in _SHAPE_NAMES:
-            p = data_path("data/objects/train", name, "000_pc.npy")
+        for name in self._shape_names:
+            p = data_path("data/objects", shape_split(name), name, "000_pc.npy")
             if p.exists():
                 arr = np.load(str(p))  # (512, 3)
             else:
@@ -106,6 +104,37 @@ class GraspPoseEnv(DirectRLEnv):
         self._obj_pcs = (
             torch.stack(pcs, dim=0).to(self.device) * self.cfg.object_scale
         )  # (NUM_SHAPES, 512, 3)
+
+        # ── Pre-load GraspNet-quality labels (scripts/generate_graspnet_labels.py) ──
+        # Missing files default to all-zero quality, which contributes nothing to
+        # the reward term (see _graspnet_reward) rather than erroring.
+        _K_GN = 20
+        gn_centers, gn_quality, n_missing = [], [], 0
+        for name in self._shape_names:
+            centers = np.zeros((_K_GN, 3), dtype=np.float32)
+            quality = np.zeros((_K_GN,), dtype=np.float32)
+            if self.cfg.use_graspnet_reward:
+                p = data_path("data/objects", shape_split(name), name, "000_graspnet.json")
+                if p.exists():
+                    with open(p) as f:
+                        gdata = json.load(f)
+                    glist = gdata["grasps"] if isinstance(gdata, dict) else gdata
+                    glist = sorted(glist, key=lambda g: -g["quality"])[:_K_GN]
+                    for i, g in enumerate(glist):
+                        centers[i] = g["center"]
+                        quality[i] = g["quality"]
+                else:
+                    n_missing += 1
+            gn_centers.append(torch.tensor(centers))
+            gn_quality.append(torch.tensor(quality))
+        self._obj_graspnet_centers = (
+            torch.stack(gn_centers, dim=0).to(self.device) * self.cfg.object_scale
+        )  # (NUM_SHAPES, _K_GN, 3)
+        self._obj_graspnet_quality = torch.stack(gn_quality, dim=0).to(self.device)  # (NUM_SHAPES, _K_GN)
+        if self.cfg.use_graspnet_reward and n_missing:
+            print(f"[GraspPoseEnv] WARNING: {n_missing}/{len(self._shape_names)} shapes missing "
+                  f"000_graspnet.json — graspnet reward term is 0 for those until "
+                  f"scripts/generate_graspnet_labels.py is run.")
 
         # ── Per-env state ──────────────────────────────────────────────────────
         B = self.num_envs
@@ -121,10 +150,11 @@ class GraspPoseEnv(DirectRLEnv):
         self._obj_anchor   = torch.zeros(B, 13, device=self.device)  # root state after settle
         self._grasp_locked = torch.zeros(B, dtype=torch.bool, device=self.device)
         self._grasp_offset = torch.zeros(B, 3, device=self.device)   # obj - ee at close
-        self._last_lift_reward    = torch.zeros(B, device=self.device)
-        self._last_leg_still      = torch.zeros(B, device=self.device)
-        self._last_contact_reward = torch.zeros(B, device=self.device)
-        self._last_place_reward   = torch.zeros(B, device=self.device)
+        self._last_lift_reward     = torch.zeros(B, device=self.device)
+        self._last_leg_still       = torch.zeros(B, device=self.device)
+        self._last_contact_reward  = torch.zeros(B, device=self.device)
+        self._last_place_reward    = torch.zeros(B, device=self.device)
+        self._last_graspnet_reward = torch.zeros(B, device=self.device)
         # Peak object z during lift+hold phases — used for lift reward in place mode
         # so we don't measure height AFTER the arm has lowered the object to the goal.
         self._last_hold_obj_z = torch.zeros(B, device=self.device)
@@ -154,6 +184,9 @@ class GraspPoseEnv(DirectRLEnv):
         self._cam_pos_w  = torch.zeros(B, 3, device=self.device)
         self._cam_quat_w = torch.zeros(B, 4, device=self.device)
         self._cam_quat_w[:, 0] = 1.0  # identity
+        # Per-episode choice of camera-rendered vs. fast pre-loaded PC path
+        # (Bernoulli(camera_pc_prob) each reset — see _reset_idx / _synthesize_pointcloud).
+        self._use_camera_this_ep = torch.zeros(B, dtype=torch.bool, device=self.device)
         # Palm world position captured at the start of the lift phase; the lift
         # target ramps up from here so it no longer chases the moving obj anchor.
         self._lift_base_w  = torch.zeros(B, 3, device=self.device)
@@ -235,6 +268,20 @@ class GraspPoseEnv(DirectRLEnv):
             self._grasp_marker = VisualizationMarkers(marker_cfg)
 
     def _setup_scene(self):
+        # Resolve the active shape set FIRST — everything else (scene spawn,
+        # PC preload in __init__, domain randomization bounds) depends on it.
+        if self.cfg.eval_object_mode:
+            self._shape_names = ycb_shape_names("eval")
+            if not self._shape_names:
+                print("[GraspPoseEnv] WARNING: eval_object_mode=True but no eval real "
+                      "objects found — falling back to procedural shapes.")
+                self._shape_names = list(PROCEDURAL_SHAPE_NAMES)
+        else:
+            self._shape_names = list(PROCEDURAL_SHAPE_NAMES) + (
+                ycb_shape_names("train") if self.cfg.use_real_objects else []
+            )
+        self._num_shapes = len(self._shape_names)
+
         self._robot = Articulation(self.cfg.robot)
         self.scene.articulations["robot"] = self._robot
 
@@ -242,7 +289,7 @@ class GraspPoseEnv(DirectRLEnv):
         self.scene.rigid_objects["table"] = self._table
 
         self._objs: list[RigidObject] = []
-        for name in _SHAPE_NAMES:
+        for name in self._shape_names:
             obj_cfg = getattr(self.cfg, f"object_{name}")
             obj = RigidObject(obj_cfg)
             self.scene.rigid_objects[name] = obj
@@ -302,14 +349,20 @@ class GraspPoseEnv(DirectRLEnv):
 
         # 2. Pick object shape(s) for each env
         if self.cfg.eval_cycle_shapes:
-            n_shapes = min(self.cfg.eval_num_shapes, NUM_SHAPES)
+            n_shapes = min(self.cfg.eval_num_shapes, self._num_shapes)
             shape_ids = (
                 self._eval_shape_step + torch.arange(n, device=self.device)
             ) % n_shapes
             self._env_shape[env_ids] = shape_ids
             self._eval_shape_step += n
         else:
-            self._env_shape[env_ids] = torch.randint(0, NUM_SHAPES, (n,), device=self.device)
+            self._env_shape[env_ids] = torch.randint(0, self._num_shapes, (n,), device=self.device)
+
+        # Per-episode choice of camera-rendered vs. fast pre-loaded PC path.
+        if self._cam_sensor is not None:
+            self._use_camera_this_ep[env_ids] = (
+                torch.rand(n, device=self.device) < self.cfg.camera_pc_prob
+            )
 
         # 3. Spawn chosen object on table, park others underground
         spawn_x = torch.empty(n, device=self.device).uniform_(*self.cfg.spawn_x_range)
@@ -1049,43 +1102,65 @@ class GraspPoseEnv(DirectRLEnv):
     def _synthesize_pointcloud(self) -> torch.Tensor:
         """Point cloud observation in object-local frame.
 
-        Two paths:
-        • use_camera_pc=True  — rendered depth from a per-episode randomised camera
-          position.  The camera branch produces viewpoint-diverse observations for
-          sim→real robustness.  Requires --enable_cameras at launch.
-        • use_camera_pc=False — fast path: sub-sample pre-loaded 512-pt PC + noise
-          + optional random Z rotation (pc_augment_yaw).
+        Two source paths, mixed PER-ENV PER-EPISODE (self._use_camera_this_ep,
+        drawn in _reset_idx from Bernoulli(camera_pc_prob)) rather than one
+        global on/off switch — both the idealized canonical-mesh-sample
+        distribution and the rendered-depth distribution (real occlusion/
+        self-shadowing from a randomised viewpoint, sim→real robustness) are
+        seen within the same training run:
+        • camera path — rendered depth from this episode's randomised camera
+          position (requires --enable_cameras at launch).
+        • fast path   — sub-sample pre-loaded 512-pt PC + optional random Z
+          rotation (pc_augment_yaw).
+
+        Sensor-realistic noise (Gaussian + dropout + outliers, severity
+        domain-randomized per episode) is then applied identically to both
+        paths — see grasping.pointcloud_utils.add_sensor_noise.
 
         Returns (B, NUM_PC_POINTS * 3) flattened, always in object-local frame.
-        _pc_aug_yaw is zeroed for the camera path so _pre_physics_step's inverse
-        rotation is a no-op (the projection pipeline already gives true local coords).
+        _pc_aug_yaw is zeroed for envs using the camera path this episode so
+        _pre_physics_step's inverse rotation is a no-op for them (the
+        projection pipeline already gives true local coords).
         """
         B = self.num_envs
+
+        # Fast pre-loaded-PC path — always computed (cheap); used outright when
+        # the camera sensor is disabled, or blended per-env otherwise.
+        shape_pcs = self._obj_pcs[self._env_shape]     # (B, 512, 3)
+        idx       = torch.randint(0, _PC_PRE_N, (B, NUM_PC_POINTS), device=self.device)
+        pc_fast   = shape_pcs.gather(1, idx.unsqueeze(-1).expand(-1, -1, 3))
+
+        if self.cfg.pc_augment_yaw:
+            aug_yaw = torch.empty(B, device=self.device).uniform_(-math.pi, math.pi)
+            self._pc_aug_yaw = aug_yaw
+            cos_y = aug_yaw.cos().unsqueeze(-1)   # (B, 1)
+            sin_y = aug_yaw.sin().unsqueeze(-1)
+            x_new = cos_y * pc_fast[:, :, 0] - sin_y * pc_fast[:, :, 1]
+            y_new = sin_y * pc_fast[:, :, 0] + cos_y * pc_fast[:, :, 1]
+            pc_fast = torch.stack([x_new, y_new, pc_fast[:, :, 2]], dim=-1)
+        else:
+            self._pc_aug_yaw.zero_()
 
         if self.cfg.use_camera_pc and self._cam_sensor is not None:
             # Rendered depth branch — camera was already moved and rendered in _reset_idx.
             depth = self._cam_sensor.data.output["distance_to_image_plane"]  # (B, H, W, 1)
             depth = depth[..., 0]                                             # (B, H, W)
-            pc_local = self._depth_to_pc_local(depth)                        # (B, N, 3)
-            pc_local = pc_local + torch.randn_like(pc_local) * _PC_NOISE_M
-            self._pc_aug_yaw.zero_()   # no yaw augment needed — camera varies viewpoint
-        else:
-            # Pre-loaded PC path (fast, no rendering overhead)
-            shape_pcs = self._obj_pcs[self._env_shape]     # (B, 512, 3)
-            idx       = torch.randint(0, _PC_PRE_N, (B, NUM_PC_POINTS), device=self.device)
-            pc_local  = shape_pcs.gather(1, idx.unsqueeze(-1).expand(-1, -1, 3))
-            pc_local  = pc_local + torch.randn_like(pc_local) * _PC_NOISE_M
+            pc_cam = self._depth_to_pc_local(depth)                          # (B, N, 3)
 
-            if self.cfg.pc_augment_yaw:
-                aug_yaw = torch.empty(B, device=self.device).uniform_(-math.pi, math.pi)
-                self._pc_aug_yaw = aug_yaw
-                cos_y = aug_yaw.cos().unsqueeze(-1)   # (B, 1)
-                sin_y = aug_yaw.sin().unsqueeze(-1)
-                x_new = cos_y * pc_local[:, :, 0] - sin_y * pc_local[:, :, 1]
-                y_new = sin_y * pc_local[:, :, 0] + cos_y * pc_local[:, :, 1]
-                pc_local = torch.stack([x_new, y_new, pc_local[:, :, 2]], dim=-1)
-            else:
-                self._pc_aug_yaw.zero_()
+            use_cam = self._use_camera_this_ep.view(B, 1, 1)
+            pc_local = torch.where(use_cam, pc_cam, pc_fast)
+            # Camera-path envs already give true local coords — zero their yaw
+            # augment so _pre_physics_step's inverse rotation is a no-op for them.
+            self._pc_aug_yaw = torch.where(
+                self._use_camera_this_ep, torch.zeros_like(self._pc_aug_yaw), self._pc_aug_yaw
+            )
+        else:
+            pc_local = pc_fast
+
+        g_std  = torch.empty(B, device=self.device).uniform_(*self.cfg.pc_noise_range_m)
+        drop_p = torch.empty(B, device=self.device).uniform_(*self.cfg.pc_dropout_frac_range)
+        out_p  = torch.empty(B, device=self.device).uniform_(*self.cfg.pc_outlier_frac_range)
+        pc_local = add_sensor_noise(pc_local, gaussian_std=g_std, dropout_frac=drop_p, outlier_frac=out_p)
 
         return pc_local.view(B, -1)   # (B, N*3) in object-local frame
 
@@ -1123,6 +1198,19 @@ class GraspPoseEnv(DirectRLEnv):
         rf_cov = (rf_dist < r).float().mean(dim=-1)
         return torch.min(lf_cov, rf_cov)
 
+    def _graspnet_reward(self) -> torch.Tensor:
+        """Distance-decayed GraspNet quality bonus at the policy's chosen grasp point.
+
+        Offline-precomputed candidates only (scripts/generate_graspnet_labels.py) —
+        no live model inference here, so this is as cheap as the other reward terms.
+        Shapes without labels yet contribute 0 (see the __init__ preload).
+        """
+        centers = self._obj_graspnet_centers[self._env_shape]   # (B, K, 3) object-local, scaled
+        quality = self._obj_graspnet_quality[self._env_shape]   # (B, K)
+        dist = (centers - self._grasp_target.unsqueeze(1)).norm(dim=-1)   # (B, K)
+        weight = torch.exp(-dist / self.cfg.graspnet_reward_radius_m)
+        return (weight * quality).max(dim=-1).values
+
     def _get_rewards(self) -> torch.Tensor:
         # Lift reward: peak object height during lift+hold (tracked in _apply_action),
         # so it's unaffected by the arm lowering the object during pick-and-place.
@@ -1137,17 +1225,28 @@ class GraspPoseEnv(DirectRLEnv):
         goal_dist = (obj_w - self._place_goal_w).norm(dim=-1)
         place_r = torch.exp(-goal_dist / self.cfg.place_sigma_m) * self._task_mode.float()
 
+        # GraspNet-bootstrapped reward: learned grasp-quality bonus at the chosen point.
+        if self.cfg.use_graspnet_reward:
+            graspnet_r = self._graspnet_reward()
+        else:
+            graspnet_r = torch.zeros(self.num_envs, device=self.device)
+
         leg_still = torch.ones(self.num_envs, device=self.device)  # no legs on Franka
 
-        self._last_lift_reward    = lift_r
-        self._last_contact_reward = contact_r
-        self._last_place_reward   = place_r
-        self._last_leg_still      = leg_still
+        self._last_lift_reward     = lift_r
+        self._last_contact_reward  = contact_r
+        self._last_place_reward    = place_r
+        self._last_graspnet_reward = graspnet_r
+        self._last_leg_still       = leg_still
 
-        w_lift    = self.cfg.lift_reward_weight
-        w_contact = self.cfg.contact_area_reward_weight
-        w_place   = self.cfg.place_reward_weight
-        return w_lift * lift_r + w_contact * contact_r + w_place * place_r
+        w_lift     = self.cfg.lift_reward_weight
+        w_contact  = self.cfg.contact_area_reward_weight
+        w_place    = self.cfg.place_reward_weight
+        w_graspnet = self.cfg.graspnet_reward_scale
+        return (
+            w_lift * lift_r + w_contact * contact_r + w_place * place_r
+            + w_graspnet * graspnet_r
+        )
 
     # ── Dones ─────────────────────────────────────────────────────────────────
 

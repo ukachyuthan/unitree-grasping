@@ -6,10 +6,10 @@ Three modes:
 
   sim_primitives   — replay on the training-time box/sphere/cylinder (sanity check).
 
-  sim_novel        — TODO: swap in USD meshes from data/objects/eval/ to prove
-                     zero-shot generalisation on never-seen shapes.
-                     Currently falls back to sim_primitives until USD mesh loading
-                     is integrated into the environment.
+  sim_novel        — swap in held-out REAL objects (scripts/fetch_ycb.py +
+                     generate_ycb_meshes.py's eval split) to prove zero-shot
+                     generalisation on never-seen real geometry. Falls back to
+                     sim_primitives if no eval real objects have been generated yet.
 
   real_camera      — read depth frames from an Intel RealSense D4xx camera,
                      run the PointNet policy, print predicted EE targets.
@@ -20,10 +20,10 @@ Usage:
     ./rl_unitree/bin/python scripts/play_g1_grasp.py \\
         --checkpoint data/grasp_logs/<run>/g1_grasp_final.pt --num_envs 4
 
-    # 2. Zero-shot on novel objects (generate first):
-    #    python scripts/generate_objects.py --n 200 --out data/objects/eval --seed 99
+    # 2. Zero-shot on held-out real objects (generate first):
+    #    python scripts/fetch_ycb.py && python scripts/generate_ycb_meshes.py
     ./rl_unitree/bin/python scripts/play_g1_grasp.py \\
-        --checkpoint ... --mode sim_novel --novel_obj_dir data/objects/eval
+        --checkpoint ... --mode sim_novel
 
     # 3. Real-camera inference (requires pyrealsense2 + real camera):
     ./rl_unitree/bin/python scripts/play_g1_grasp.py \\
@@ -36,7 +36,6 @@ Sim-to-real deployment notes:
 """
 
 import argparse
-import os
 import sys
 
 from isaaclab.app import AppLauncher
@@ -46,7 +45,6 @@ parser.add_argument("--checkpoint",    type=str, required=True)
 parser.add_argument("--mode",          type=str,
                     choices=["sim_primitives", "sim_novel", "real_camera"],
                     default="sim_primitives")
-parser.add_argument("--novel_obj_dir", type=str, default="data/objects/eval")
 parser.add_argument("--num_envs",      type=int, default=4)
 parser.add_argument("--num_episodes",  type=int, default=20)
 AppLauncher.add_app_launcher_args(parser)
@@ -67,6 +65,7 @@ bootstrap()
 
 from envs.g1_grasp_env_cfg import G1GraspEnvCfg, OBS_DIM, NUM_ACTIONS
 from envs.g1_grasp_env import G1GraspEnv
+from envs._object_registry import ycb_shape_names
 from models.grasp_actor_critic import PointNetActorCritic
 
 
@@ -92,20 +91,19 @@ def run_sim(device: str, mode: str):
     env_cfg.scene.num_envs = args.num_envs
 
     if mode == "sim_novel":
-        obj_files = [
-            f for f in os.listdir(args.novel_obj_dir)
-            if f.endswith((".obj", ".usd"))
-        ] if os.path.isdir(args.novel_obj_dir) else []
-
-        if obj_files:
-            print(f"[play] {len(obj_files)} novel meshes found in {args.novel_obj_dir}")
-            print("       USD mesh swapping not yet integrated — running primitives.")
-            print("       Extend G1GraspEnvCfg.object_box/sphere/cylinder with USD paths")
-            print("       to test true zero-shot generalisation.")
+        # Held-out REAL objects (scripts/fetch_ycb.py + generate_ycb_meshes.py),
+        # never seen during training if --use_real_objects was on for that run —
+        # eval_object_mode swaps the env's entire object set to just these.
+        eval_names = ycb_shape_names("eval")
+        if eval_names:
+            env_cfg.eval_object_mode = True
+            preview = ", ".join(eval_names[:5]) + ("..." if len(eval_names) > 5 else "")
+            print(f"[play] sim_novel: {len(eval_names)} held-out real objects ({preview})")
         else:
-            print(f"[play] No meshes in {args.novel_obj_dir}")
-            print("       Generate first: python scripts/generate_objects.py "
-                  "--n 200 --out data/objects/eval --seed 99")
+            print(f"[play] sim_novel: no held-out real objects found under data/objects/eval/.")
+            print("       Generate first: python scripts/fetch_ycb.py && "
+                  "python scripts/generate_ycb_meshes.py")
+            print("       Falling back to procedural shapes (same as sim_primitives).")
 
     env    = G1GraspEnv(cfg=env_cfg)
     policy = load_policy(args.checkpoint, device)

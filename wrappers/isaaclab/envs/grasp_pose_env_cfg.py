@@ -10,6 +10,9 @@ Robot: Franka Emika Panda with parallel 2-finger gripper.
 
 from __future__ import annotations
 
+import colorsys
+import hashlib
+
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, RigidObjectCfg
 from isaaclab.actuators import ImplicitActuatorCfg
@@ -18,6 +21,9 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
+
+from envs._paths import data_path
+from envs._object_registry import PROCEDURAL_SHAPE_NAMES, ycb_shape_names, prim_name
 
 # ── Dimensions ────────────────────────────────────────────────────────────────
 NUM_PC_POINTS: int = 128
@@ -42,13 +48,38 @@ N_LOWER     : int = 30   # descend to place height
 N_OPEN      : int = 15   # open gripper and release
 EXEC_STEPS  : int = N_APPROACH + N_CLOSE + N_LIFT + N_HOLD + N_TRANSPORT + N_LOWER + N_OPEN
 
-_OBJECT_PRIM_NAMES = [
-    "Torus", "LShape", "TShape", "CShape", "Dumbbell", "Wedge",
-    "StarPrism", "Bracket", "SteppedCyl", "TwistedBar", "IrregularExt", "ConvexHull",
-]
+# Union of train + eval real-object families — used only to size the contact
+# filter and pre-declare RigidObjectCfg fields; harmless if some are unused
+# by a given run (use_real_objects=False, or eval-only play scripts).
+_ALL_YCB_NAMES = sorted(set(ycb_shape_names("train")) | set(ycb_shape_names("eval")))
+_ALL_SHAPE_NAMES_FOR_CONTACT = PROCEDURAL_SHAPE_NAMES + _ALL_YCB_NAMES
 OBJECT_CONTACT_FILTER_PATHS = [
-    f"/World/envs/env_.*/{name}" for name in _OBJECT_PRIM_NAMES
+    f"/World/envs/env_.*/{prim_name(name)}" for name in _ALL_SHAPE_NAMES_FOR_CONTACT
 ]
+
+
+def _auto_color(name: str) -> tuple[float, float, float]:
+    """Deterministic distinct visualization color per real-object name."""
+    h = int(hashlib.md5(name.encode()).hexdigest(), 16) % 360 / 360.0
+    return colorsys.hsv_to_rgb(h, 0.6, 0.85)
+
+
+def _usd_obj(name: str, color: tuple, split: str = "train") -> RigidObjectCfg:
+    usd_path = str(data_path("data/objects", split, name, "000.usd"))
+    return RigidObjectCfg(
+        prim_path=f"/World/envs/env_.*/{prim_name(name)}",
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.5, 0.0, -20.0)),
+        spawn=sim_utils.UsdFileCfg(
+            usd_path=usd_path,
+            scale=(OBJECT_SCALE, OBJECT_SCALE, OBJECT_SCALE),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(
+                disable_gravity=False, max_depenetration_velocity=5.0,
+            ),
+            mass_props=sim_utils.MassPropertiesCfg(mass=OBJECT_MASS),
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=color),
+        ),
+    )
 
 
 @configclass
@@ -145,25 +176,8 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
         ),
     )
 
-    # ── Objects (same 12 shape families as before) ────────────────────────────
-    def _usd_obj(name: str, color: tuple) -> RigidObjectCfg:
-        from envs._paths import data_path
-        usd_path = str(data_path("data/objects/train", name, "000.usd"))
-        return RigidObjectCfg(
-            prim_path=f"/World/envs/env_.*/{name.title().replace('_','')}",
-            init_state=RigidObjectCfg.InitialStateCfg(pos=(0.5, 0.0, -20.0)),
-            spawn=sim_utils.UsdFileCfg(
-                usd_path=usd_path,
-                scale=(OBJECT_SCALE, OBJECT_SCALE, OBJECT_SCALE),
-                rigid_props=sim_utils.RigidBodyPropertiesCfg(
-                    disable_gravity=False, max_depenetration_velocity=5.0,
-                ),
-                mass_props=sim_utils.MassPropertiesCfg(mass=OBJECT_MASS),
-                collision_props=sim_utils.CollisionPropertiesCfg(),
-                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=color),
-            ),
-        )
-
+    # ── Objects: 12 procedural shape families (real YCB families are added
+    #    dynamically in __post_init__ below — see _object_registry.py) ────────
     object_torus:         RigidObjectCfg = _usd_obj("torus",         (0.9, 0.3, 0.1))
     object_l_shape:       RigidObjectCfg = _usd_obj("l_shape",       (0.2, 0.8, 0.2))
     object_t_shape:       RigidObjectCfg = _usd_obj("t_shape",       (0.2, 0.4, 0.9))
@@ -275,11 +289,44 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
     # Spawn a jittered ring of depth cameras around each env's object per episode
     # so the policy learns to handle arbitrary viewpoints (sim→real robustness).
     # Requires --enable_cameras when launching (e.g. --headless --enable_cameras).
-    # When False (default) the fast pre-loaded PC path is used instead.
-    use_camera_pc: bool = False
+    # use_camera_pc=False disables the camera sensor entirely (saves render cost).
+    # When True, camera_pc_prob controls the PER-EPISODE mix between the
+    # rendered-camera path (real occlusion/self-shadowing) and the fast
+    # pre-loaded-PC path — not an all-or-nothing switch, so both observation
+    # distributions are seen during the same training run.
+    use_camera_pc: bool = True
+    camera_pc_prob: float = 0.5
     camera_width: int = 64
     camera_height: int = 64
     camera_horizontal_dist_range: tuple = (0.30, 0.55)  # metres from object centre
     camera_height_range: tuple = (0.15, 0.40)           # metres above table surface
     camera_fov_deg: float = 70.0                        # horizontal field of view
     camera_depth_clip: tuple = (0.05, 1.5)              # valid depth window (metres)
+
+    # ── Real-object dataset (scripts/fetch_ycb.py + generate_ycb_meshes.py) ───
+    # False reproduces the original RNG-only training distribution exactly.
+    use_real_objects: bool = True
+    # True: build only from ycb_shape_names("eval") (held-out real objects),
+    # ignoring use_real_objects/procedural shapes — used by play scripts to
+    # test zero-shot generalization on never-seen real objects.
+    eval_object_mode: bool = False
+
+    # ── Sensor-realistic point-cloud noise (Gaussian + dropout + outliers) ────
+    # Severity is domain-randomized per episode within these ranges — see
+    # grasping/pointcloud_utils.add_sensor_noise(). Applied identically to
+    # procedural and real objects so noise level can't leak object identity.
+    pc_noise_range_m: tuple        = (0.0, 0.005)
+    pc_dropout_frac_range: tuple   = (0.0, 0.10)
+    pc_outlier_frac_range: tuple   = (0.0, 0.02)
+
+    # ── GraspNet-bootstrapped reward (scripts/generate_graspnet_labels.py) ────
+    use_graspnet_reward: bool = True
+    graspnet_reward_scale: float = 1.0
+    graspnet_reward_radius_m: float = 0.03   # distance-decay radius for the quality bonus
+
+    def __post_init__(self):
+        if hasattr(super(), "__post_init__"):
+            super().__post_init__()
+        for name in _ALL_YCB_NAMES:
+            split = "eval" if name in ycb_shape_names("eval") else "train"
+            setattr(self, f"object_{name}", _usd_obj(name, _auto_color(name), split=split))
