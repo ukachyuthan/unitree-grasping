@@ -238,6 +238,38 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
     return ac
 
 
+def _load_checkpoint(ac, path: str, device, strict_full: bool = True) -> str:
+    """Load grasp_pose checkpoint; partial load when expanding 3-D → 5-D action head."""
+    ckpt = torch.load(path, map_location=device, weights_only=False)
+    state = ckpt.get("model", ckpt)
+    own = ac.state_dict()
+    if strict_full:
+        try:
+            ac.load_state_dict(state, strict=True)
+            return "full"
+        except RuntimeError:
+            pass
+    loaded = {}
+    for k, v in state.items():
+        if k not in own or own[k].shape == v.shape:
+            loaded[k] = v
+        elif k == "actor_head.4.weight" and v.shape[0] <= own[k].shape[0]:
+            w = own[k].clone()
+            w[: v.shape[0]] = v
+            loaded[k] = w
+        elif k == "actor_head.4.bias" and v.shape[0] <= own[k].shape[0]:
+            b = own[k].clone()
+            b[: v.shape[0]] = v
+            loaded[k] = b
+        elif k == "std" and v.numel() <= own[k].numel():
+            s = own[k].clone()
+            s[: v.numel()] = v
+            loaded[k] = s
+    ac.load_state_dict(loaded, strict=False)
+    n = len(loaded)
+    return f"partial ({n}/{len(own)} keys, xyz warm-start)"
+
+
 def main():
     device = args.device  # from AppLauncher: cuda:0 (default) or cpu
     print(f"[grasp-pose-train] policy device={device}  envs={args.num_envs}")
@@ -246,7 +278,10 @@ def main():
     env_cfg.scene.num_envs = args.num_envs
     env_cfg.sim.device = device
     env_cfg.use_real_objects = args.use_real_objects
+    if not args.enable_cameras:
+        env_cfg.use_camera_pc = False
     print(f"[grasp-pose-train] use_real_objects={args.use_real_objects}")
+    print(f"[grasp-pose-train] use_camera_pc={env_cfg.use_camera_pc}")
     print(f"[grasp-pose-train] simulation device={env_cfg.sim.device}")
 
     env = GraspPoseEnv(cfg=env_cfg, render_mode=None)
@@ -267,9 +302,8 @@ def main():
     ).to(device)
 
     if args.resume and os.path.exists(args.resume):
-        ckpt = torch.load(args.resume, map_location=device, weights_only=False)
-        ac.load_state_dict(ckpt["model"], strict=True)
-        print(f"[grasp-pose-train] resume: loaded full policy from {args.resume}")
+        mode = _load_checkpoint(ac, args.resume, device)
+        print(f"[grasp-pose-train] resume: {mode} from {args.resume}")
     elif args.pretrain and os.path.exists(args.pretrain):
         ckpt = torch.load(args.pretrain, map_location=device, weights_only=False)
         ac.actor_encoder.load_state_dict(ckpt["encoder"])

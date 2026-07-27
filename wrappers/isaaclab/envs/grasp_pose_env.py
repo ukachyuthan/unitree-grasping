@@ -24,9 +24,7 @@ from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from isaaclab.utils.math import (
     quat_rotate,
     compute_pose_error,
-    quat_from_euler_xyz,
-    euler_xyz_from_quat,
-    quat_mul,
+    quat_from_matrix,
     matrix_from_quat,
     quat_inv,
 )
@@ -720,18 +718,69 @@ class GraspPoseEnv(DirectRLEnv):
         )
         return grasp_w - offset_w
 
+    def _grasp_approach_dir_w(self) -> torch.Tensor:
+        """Unit approach direction (palm → grasp) with pitch/roll from local grasp offset."""
+        g = self._grasp_target
+        s = self.cfg.ik_grasp_tilt_scale
+        dir_local = torch.stack(
+            [g[:, 0] * s, g[:, 1] * s, -torch.ones_like(g[:, 0])],
+            dim=-1,
+        )
+        dir_local = dir_local / dir_local.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+        return quat_rotate(self._grasp_origin_quat, dir_local)
+
+    def _quat_from_z_and_y_hint(
+        self, z_axis: torch.Tensor, y_hint: torch.Tensor
+    ) -> torch.Tensor:
+        """Build EE quat with hand +Z = z_axis and jaw opening near y_hint."""
+        z = z_axis / z_axis.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+        y_hint = y_hint / y_hint.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+        x = torch.cross(y_hint, z, dim=-1)
+        x_norm = x.norm(dim=-1, keepdim=True)
+        fallback = torch.tensor([1.0, 0.0, 0.0], device=z.device).expand_as(z)
+        x = torch.where(
+            x_norm > 1e-4,
+            x / x_norm.clamp(min=1e-6),
+            torch.cross(z, fallback, dim=-1),
+        )
+        x = x / x.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+        y = torch.cross(z, x, dim=-1)
+        return quat_from_matrix(torch.stack([x, y, z], dim=-1))
+
     def _approach_target_quat(self) -> torch.Tensor:
-        """Top-down EE orientation with optional yaw toward the grasp point."""
-        if not self.cfg.ik_orient_yaw_to_object:
+        """EE orientation: fingers along tilted approach, jaw yaw toward object."""
+        if not self.cfg.ik_orient_use_grasp_tilt and not self.cfg.ik_orient_yaw_to_object:
             return self._home_ee_quat.clone()
-        _, _, home_yaw = euler_xyz_from_quat(self._home_ee_quat)
-        grasp_w = self._grasp_point_world()
-        base_xy = self._robot.data.root_pos_w[:, :2]
-        yaw = torch.atan2(grasp_w[:, 1] - base_xy[:, 1], grasp_w[:, 0] - base_xy[:, 0])
-        dyaw = yaw - home_yaw
-        zero = torch.zeros_like(dyaw)
-        dquat = quat_from_euler_xyz(zero, zero, dyaw)
-        return quat_mul(dquat, self._home_ee_quat)
+
+        if self.cfg.ik_orient_use_grasp_tilt:
+            approach = self._grasp_approach_dir_w()
+        else:
+            palm_w = self._approach_target_w()
+            grasp_w = self._grasp_point_world()
+            approach = grasp_w - palm_w
+            approach = approach / approach.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+
+        z_hand = -approach
+
+        if self.cfg.ik_orient_yaw_to_object:
+            grasp_w = self._grasp_point_world()
+            base_xy = self._robot.data.root_pos_w[:, :2]
+            to_obj = grasp_w[:, :2] - base_xy
+            to_obj_h = to_obj / to_obj.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+            to_obj_h = torch.cat(
+                [to_obj_h, torch.zeros(self.num_envs, 1, device=self.device)],
+                dim=-1,
+            )
+            world_up = torch.tensor([0.0, 0.0, 1.0], device=self.device).expand(
+                self.num_envs, -1
+            )
+            y_hint = torch.cross(torch.cross(to_obj_h, world_up, dim=-1), z_hand, dim=-1)
+        else:
+            y_hint = torch.tensor([0.0, 1.0, 0.0], device=self.device).expand(
+                self.num_envs, -1
+            )
+
+        return self._quat_from_z_and_y_hint(z_hand, y_hint)
 
     def _do_approach(self):
         """Position IK toward grasp, then wrist orientation correction."""

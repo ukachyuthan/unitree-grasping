@@ -17,10 +17,12 @@ cd ~/Documents/Collab_Research/unitree-grasping
 python wrappers/isaaclab/scripts/train_grasp_pose.py \
   --headless --num_envs 96 --max_iters 2000
 
-# Warm-start from a previous checkpoint (recommended after changing scripted IK)
+# Warm-start from 3-D checkpoint into 5-D tilt/roll policy (stronger orient IK enabled)
 python wrappers/isaaclab/scripts/train_grasp_pose.py \
   --headless --num_envs 96 --max_iters 2000 \
   --resume wrappers/isaaclab/data/grasp_logs/grasp_pose_envs96_20260718_205748/grasp_pose_200.pt
+
+tail -f /tmp/grasp_train_5d.log
 
 # Optional encoder warm start (pretrain only loads PointNet weights)
 python wrappers/isaaclab/scripts/train_grasp_pose.py \
@@ -84,4 +86,28 @@ python wrappers/isaaclab/scripts/debug_franka_grasp.py --headless --num_envs 1
 
 Path: `wrappers/isaaclab/data/grasp_logs/grasp_pose_envs96_20260718_205748/grasp_pose_200.pt`
 
-Checkpoints are local-only (not committed). Copy the best to `data/grasp_weights/` if you want a stable alias.
+## Residual predictive control (Path A+)
+
+Closed-loop policy refines scripted IK every 4 physics steps (~15 Hz). Warm-starts grasp head from Path A.
+
+```bash
+# Train (default: warm-start grasp_pose_200.pt, freeze grasp 200 iters)
+python wrappers/isaaclab/scripts/train_grasp_pose_residual.py \
+  --headless --num_envs 64 --max_iters 2000 --num_steps_per_env 48 \
+  --pretrain wrappers/isaaclab/data/grasp_logs/grasp_pose_envs96_20260718_205748/grasp_pose_200.pt \
+  --freeze_grasp_iters 200 2>&1 | tee /tmp/grasp_residual_train.log
+
+# Eval
+python wrappers/isaaclab/scripts/play_grasp_pose_residual.py \
+  --headless --num_envs 1 --num_episodes 10 --cycle_shapes --seed 42 \
+  --checkpoint wrappers/isaaclab/data/grasp_logs/grasp_residual_envs64_<timestamp>/grasp_residual_final.pt
+
+# Video
+python wrappers/isaaclab/scripts/play_grasp_pose_residual.py \
+  --headless --enable_cameras --video --video_episodes 5 --cycle_shapes \
+  --checkpoint wrappers/isaaclab/data/grasp_logs/grasp_residual_envs64_<timestamp>/grasp_residual_final.pt \
+  --out data/viz/grasp_residual_rollout.mp4
+```
+
+**Architecture:** obs = PC (384) + proprio (12) → grasp(5) PC-only head + residual(7) from PC+proprio.  
+Success metric = terminal lift reward ≥ 0.5 (not dense step rewards).

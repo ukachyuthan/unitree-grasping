@@ -253,9 +253,11 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
     ik_alpha: float = 0.6
     ik_jacobian_interval: int = 4
     ik_orient_weight: float = 1.0
-    ik_orient_alpha: float = 0.35
-    ik_orient_pos_thresh: float = 0.04   # metres — only rotate wrist once palm is near target
+    ik_orient_alpha: float = 0.5          # stronger wrist correction during approach
+    ik_orient_pos_thresh: float = 0.08    # start rotating earlier (was 4 cm)
     ik_orient_yaw_to_object: bool = True
+    ik_orient_use_grasp_tilt: bool = True
+    ik_grasp_tilt_scale: float = 3.5       # more pitch from offset grasps (was 2.5)
 
     # ── Pick-and-place task mode ───────────────────────────────────────────────
     # 0.5 = 50% episodes are pick-and-place, 50% lift-only.
