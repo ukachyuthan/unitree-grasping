@@ -49,6 +49,67 @@ tail -f wrappers/isaaclab/data/grasp_logs/grasp_pose_envs96_20260726_191922/metr
 tensorboard --logdir wrappers/isaaclab/data/grasp_logs/<run>/tb
 ```
 
+### Failure replay queue → VR demo dataset
+
+Failed grasps are replayed during training, and the ones that keep failing are
+set aside so you can demonstrate them by hand in VR (`../vr-grasping-project`).
+This is on by default.
+
+1. Every failed episode (`lift_reward < 0.5`) joins a **replay queue**, storing
+   its exact shape and settled pose.
+2. On each step, every env has a 10% chance that its next episode replays a
+   random queued failure instead of a fresh random spawn
+   (`GraspPoseEnv.queue_replays`). Replays train the policy like any other
+   episode.
+3. How a replay resolves its entry:
+   - **Succeeds:** the policy has learned it, and it leaves the queue.
+   - **Fails:** it counts one strike.
+   - **4 failed replays:** it's exported as a VR case and leaves the queue.
+     The original failure doesn't count toward the 4.
+4. When the queue is full (512), new failures are turned away instead of
+   evicting queued ones. Otherwise entries would churn out before any reached 4
+   replays.
+5. Nothing is queued for the first 50 iterations, since an untrained policy
+   fails everything.
+
+At the defaults, an entry is replayed about once every
+`512 / (0.1 × num_envs)` steps. With 64 envs that's about 80 steps (5 iters of
+16 steps), so a case needs roughly 20 iterations of steady failure to export.
+To export faster, raise `--vr_replay_prob` or shrink `--vr_queue_capacity`.
+
+Output goes to `<repo>/data/vr_failures/<run_name>/`, whatever directory you
+launch from:
+
+```
+manifest.json          exported cases
+monitor.json           live queue: size, entries by replay strikes, per-shape counts
+cases/<case_id>.json   object pose, point cloud, mesh ref, original + 4 failed replays
+objects/<shape>.obj    mesh copy, so the run folder is self-contained
+demos/<case_id>/       written by the VR app
+```
+
+```bash
+watch -n5 'python -m json.tool data/vr_failures/<run>/monitor.json | head -40'
+```
+
+TensorBoard also gets `vr/cases_exported`, `vr/queue_size` and
+`vr/replay_success_rate`. The last is the fraction of replays that now succeed,
+a direct read on whether the policy is fixing its hard cases. Replays are part
+of the training batch, so `train/success_rate` includes them.
+
+Flags: `--vr_fail_threshold 4`, `--vr_replay_prob 0.1`, `--vr_queue_capacity 512`,
+`--vr_success_lift 0.5`, `--vr_warmup_iters 50`, `--vr_max_cases 200`,
+`--vr_failures_dir <dir>` (`--vr_failures_dir ''` disables it, and replays
+with it).
+
+Collect the demos you've recorded as `(c1, c2)` contact pairs for BC:
+
+```bash
+python scripts/load_vr_demos.py --out data/vr_failures/demos.npz
+```
+
+The curator's tests don't need Isaac: `python3 -m pytest tests/test_vr_failures.py`.
+
 ---
 
 ## Evaluate (stats only)

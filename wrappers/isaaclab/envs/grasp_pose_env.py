@@ -150,6 +150,12 @@ class GraspPoseEnv(DirectRLEnv):
         # ── Per-env state ──────────────────────────────────────────────────────
         B = self.num_envs
         self._env_shape    = torch.zeros(B, dtype=torch.long, device=self.device)
+        # One-shot replay overrides (see queue_replays): the next reset of a flagged
+        # env spawns this shape at this pose instead of a random draw.
+        self._replay_pending = torch.zeros(B, dtype=torch.bool, device=self.device)
+        self._replay_shape = torch.zeros(B, dtype=torch.long, device=self.device)
+        self._replay_xy = torch.zeros(B, 2, device=self.device)
+        self._replay_quat = torch.zeros(B, 4, device=self.device)
         # _grasp_target: offset from object centre in object-LOCAL frame (metres).
         # Converted to robot-base frame inside _do_approach by adding obj_base.
         self._grasp_target = torch.zeros(B, 3, device=self.device)
@@ -494,6 +500,17 @@ class GraspPoseEnv(DirectRLEnv):
             spawn_y = torch.full((n,), cy, device=self.device)
             quat = torch.zeros(n, 4, device=self.device)
             quat[:, 0] = 1.0
+        # 3b. Replayed failures override the random draw (shape, xy, orientation);
+        # z still comes from spawn_z_offset + settling, as for any episode.
+        replay = self._replay_pending[env_ids]
+        if replay.any():
+            ids = env_ids[replay]
+            self._env_shape[ids] = self._replay_shape[ids]
+            spawn_x[replay] = self._replay_xy[ids, 0]
+            spawn_y[replay] = self._replay_xy[ids, 1]
+            quat[replay] = self._replay_quat[ids]
+            self._replay_pending[ids] = False
+
         spawn_z = torch.full((n,), self.cfg.table_surface_z + self.cfg.spawn_z_offset, device=self.device)
         self._spawn_z[env_ids] = spawn_z   # record for reward computation
 
@@ -568,6 +585,18 @@ class GraspPoseEnv(DirectRLEnv):
             self.scene.write_data_to_sim()
             self.sim.step(render=True)
             self.scene.update(dt=self.physics_dt)
+
+    def queue_replays(self, env_ids, shape_ids, xy, quat_wxyz):
+        """Make the next reset of each env in env_ids re-spawn a given case.
+
+        Used by training/vr_failures.py to re-insert failed grasps into training.
+        xy is relative to the env origin; quat is the settled object orientation.
+        """
+        ids = torch.as_tensor(env_ids, dtype=torch.long, device=self.device)
+        self._replay_shape[ids] = torch.as_tensor(shape_ids, dtype=torch.long, device=self.device)
+        self._replay_xy[ids] = torch.as_tensor(xy, dtype=torch.float32, device=self.device)
+        self._replay_quat[ids] = torch.as_tensor(quat_wxyz, dtype=torch.float32, device=self.device)
+        self._replay_pending[ids] = True
 
     def _settle_physics(self, n_steps: int | None = None):
         """Let spawned objects find their true resting height before the policy acts.

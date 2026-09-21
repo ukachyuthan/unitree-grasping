@@ -51,6 +51,21 @@ parser.add_argument("--path_a", action="store_true",
                     help="Path A action space: center + tilt + roll + width (not c1/c2).")
 parser.add_argument("--two_point", action="store_true",
                     help="Two-point action space: c1 + c2 (overrides --path_a).")
+parser.add_argument("--vr_failures_dir", type=str, default=None,
+                    help="Where repeated failures are exported as a VR demo dataset "
+                         "(see training/vr_failures.py). Default: <repo>/data/vr_failures, "
+                         "wherever this is launched from. Pass '' to disable.")
+parser.add_argument("--vr_fail_threshold", type=int, default=4,
+                    help="Failed replays of a queued failure before it is exported for VR.")
+parser.add_argument("--vr_replay_prob", type=float, default=0.1,
+                    help="Per env per step: chance the next episode replays a queued failure.")
+parser.add_argument("--vr_queue_capacity", type=int, default=512,
+                    help="Replay queue size; the oldest failures are dropped when full.")
+parser.add_argument("--vr_success_lift", type=float, default=0.5,
+                    help="lift_reward fraction at or above which an attempt counts as a success.")
+parser.add_argument("--vr_warmup_iters", type=int, default=50,
+                    help="Don't queue failures for the first N iterations (untrained policy).")
+parser.add_argument("--vr_max_cases", type=int, default=200)
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 
@@ -79,10 +94,94 @@ from envs.grasp_pose_env_cfg import (
 )
 from envs.grasp_pose_env import GraspPoseEnv
 from models.grasp_pose_actor_critic import GraspPoseActorCritic
+from envs._object_registry import shape_split
+from envs._paths import data_path
+from training.vr_failures import FailureCurator, FailureCuratorConfig
 
 
 def _obs_tensor(obs_td, device):
     return obs_td["policy"].to(device)
+
+
+def _episode_context(u) -> dict:
+    """Per-env state of the episodes about to run.
+
+    Must be read BEFORE env.step(): DirectRLEnv auto-resets finished envs inside
+    step(), so afterwards _env_shape / _obj_anchor already describe the next episode.
+    """
+    return {
+        "shape_ids": u._env_shape.detach().cpu().numpy().copy(),
+        "obj_pos": (u._obj_anchor[:, :3] - u.scene.env_origins).detach().cpu().numpy(),
+        "obj_quat_wxyz": u._obj_anchor[:, 3:7].detach().cpu().numpy().copy(),
+    }
+
+
+def _episode_outcome(u, rew) -> dict:
+    """Per-env results of the episodes that just finished (read AFTER env.step()).
+
+    Reward terms and grasp targets are not touched by _reset_idx, so they still
+    belong to the finished episode.
+    """
+    def np_(t):
+        return t.detach().cpu().numpy()
+
+    return {
+        "lift_frac": np_(u._last_lift_reward),
+        "reward": np_(rew),
+        "reward_terms": {
+            "lift": np_(u._last_lift_reward),
+            "contact": np_(u._last_contact_reward),
+            "surface": np_(u._last_surface_contact_reward),
+            "place": np_(u._last_place_reward),
+            "graspnet": np_(u._last_graspnet_reward),
+        },
+        "contact_left_local": np_(u._contact_left_local),
+        "contact_right_local": np_(u._contact_right_local),
+        "grasp_center_local": np_(u._grasp_target),
+        "grasp_width": np_(u._grasp_width),
+    }
+
+
+def _make_failure_curator(u, run_name: str) -> FailureCurator | None:
+    if args.vr_failures_dir == "":
+        return None
+    out_dir = args.vr_failures_dir or str(data_path("data/vr_failures"))
+
+    def mesh_path(shape: str):
+        p = data_path("data/objects", shape_split(shape), shape, "000.obj")
+        return p if p.exists() else None
+
+    table = u.cfg.table
+    scene = {
+        "robot": {"name": "franka_panda", "base_pos": [0.0, 0.0, 0.0]},
+        "table": {
+            "center": [float(v) for v in table.init_state.pos],
+            "size": [float(v) for v in table.spawn.size],
+            "surface_z": float(u.cfg.table_surface_z),
+        },
+        "object_scale": float(u.cfg.object_scale),
+        "lift_target_m": float(u.cfg.lift_target_m),
+        "gripper_width_bounds": [float(v) for v in u.cfg.grasp_width_bounds],
+    }
+    cfg = FailureCuratorConfig(
+        out_dir=out_dir,
+        run_name=run_name,
+        fail_threshold=args.vr_fail_threshold,
+        success_lift=args.vr_success_lift,
+        replay_prob=args.vr_replay_prob,
+        queue_capacity=args.vr_queue_capacity,
+        warmup_iters=args.vr_warmup_iters,
+        max_cases=args.vr_max_cases,
+        seed=args.seed,
+    )
+    return FailureCurator(
+        cfg,
+        num_envs=u.num_envs,
+        shape_names=u._shape_names,
+        object_pcs=u._obj_pcs.detach().cpu().numpy(),
+        mesh_path_fn=mesh_path,
+        scene=scene,
+    )
 
 
 def ppo_update(ac, optimizer, obs, actions, old_logp, returns, advantages,
@@ -108,7 +207,7 @@ def ppo_update(ac, optimizer, obs, actions, old_logp, returns, advantages,
 
 
 def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=None,
-              success_threshold=0.25, lr=3e-4,
+              curator=None, success_threshold=0.25, lr=3e-4,
               num_steps_per_env=16, num_epochs=5, num_mini_batches=4,
               clip_param=0.2, value_coef=1.0, entropy_coef=0.02,
               max_grad_norm=1.0, save_interval=25):
@@ -129,7 +228,18 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
                 logp = ac.get_actions_log_prob(actions)
                 values = ac.evaluate(obs).squeeze(-1)
 
+            ctx = None
+            if curator is not None:
+                ctx = _episode_context(env.unwrapped)
+                # The resets inside env.step() spawn the next episodes, so replays
+                # of queued failures must be scheduled before it.
+                replays = curator.plan_replays(it)
+                if len(replays["env_ids"]):
+                    env.unwrapped.queue_replays(**replays)
             obs_td, rew, _, _ = env.step(actions)
+            if curator is not None:
+                for case_id in curator.observe(it, **ctx, **_episode_outcome(env.unwrapped, rew)):
+                    print(f"  [vr-failures] exported case {case_id}")
 
             obs_buf.append(obs)
             act_buf.append(actions)
@@ -203,6 +313,10 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
             "total_loss": last_total_loss,
             "grad_norm": last_grad_norm,
         }
+        if curator is not None:
+            stats["vr_cases_exported"] = curator.num_cases
+            stats["vr_queue_size"] = curator.queue_size
+            stats["vr_replay_success_rate"] = curator.pop_replay_success_rate()
 
         if metrics_path is not None:
             with open(metrics_path, "a", encoding="utf-8") as f:
@@ -242,6 +356,11 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
             writer.add_scalar("train/entropy", last_entropy, it)
             writer.add_scalar("train/total_loss", last_total_loss, it)
             writer.add_scalar("train/grad_norm", last_grad_norm, it)
+            if curator is not None:
+                writer.add_scalar("vr/cases_exported", curator.num_cases, it)
+                writer.add_scalar("vr/queue_size", curator.queue_size, it)
+                if stats["vr_replay_success_rate"] == stats["vr_replay_success_rate"]:  # not NaN
+                    writer.add_scalar("vr/replay_success_rate", stats["vr_replay_success_rate"], it)
             writer.flush()
 
         if it % save_interval == 0:
@@ -384,11 +503,18 @@ def main():
     print(f"[grasp-pose-train] tensorboard → {tb_dir}")
     print(f"[grasp-pose-train] metrics log  → {metrics_path}")
 
+    curator = _make_failure_curator(env.unwrapped, run_name)
+    if curator is not None:
+        print(f"[grasp-pose-train] vr failures → {curator.run_dir}  "
+              f"(replay_prob={args.vr_replay_prob}, fail_threshold={args.vr_fail_threshold}, "
+              f"warmup={args.vr_warmup_iters} iters)")
+
     train_ppo(
         env, ac, device, log_dir,
         max_iters=args.max_iters,
         writer=writer,
         metrics_path=metrics_path,
+        curator=curator,
     )
 
     writer.close()
