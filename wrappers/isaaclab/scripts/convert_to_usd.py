@@ -17,13 +17,17 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--input",  type=str, default="data/objects/train")
 parser.add_argument("--collision", type=str, default="convexDecomposition",
                     choices=["convexDecomposition", "convexHull", "meshSimplification"])
+parser.add_argument("--force", action="store_true",
+                    help="Re-convert even if .usd already exists")
+parser.add_argument("--ycb_only", action="store_true",
+                    help="Only convert OBJ files under ycb_* family folders")
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 
 app_launcher = AppLauncher(args)
 simulation_app = app_launcher.app
 
-import glob, json, os, time
+import glob, json, os, shutil, time
 from pathlib import Path
 import sys
 
@@ -44,12 +48,29 @@ _COLLISION_CFG = {
 
 def convert_one(obj_path: str, collision_approx: str) -> str | None:
     """Convert a single OBJ → USD, return the USD path."""
+    obj_path = os.path.abspath(obj_path)
+    obj_dir = os.path.dirname(obj_path)
+    stem = os.path.splitext(os.path.basename(obj_path))[0]
+    family = os.path.basename(obj_dir)
+    usd_name = f"{stem}.usd"
+
+    # Numeric-only stems (000.obj) produce invalid USD prim paths in MeshConverter.
+    asset_path = obj_path
+    cleanup: str | None = None
+    force = args.force
+    if stem.isdigit():
+        safe_path = os.path.join(obj_dir, f"convert_{family}_{stem}.obj")
+        shutil.copy2(obj_path, safe_path)
+        asset_path = safe_path
+        cleanup = safe_path
+        force = True
+
     mesh_collision_cls = _COLLISION_CFG[collision_approx]
     cfg = MeshConverterCfg(
-        asset_path=obj_path,
-        usd_dir=os.path.dirname(obj_path),
-        usd_file_name=os.path.splitext(os.path.basename(obj_path))[0] + ".usd",
-        force_usd_conversion=False,
+        asset_path=asset_path,
+        usd_dir=obj_dir,
+        usd_file_name=usd_name,
+        force_usd_conversion=force,
         make_instanceable=False,
         mass_props=schemas_cfg.MassPropertiesCfg(mass=0.15),
         rigid_props=schemas_cfg.RigidBodyPropertiesCfg(
@@ -65,10 +86,16 @@ def convert_one(obj_path: str, collision_approx: str) -> str | None:
     except Exception as e:
         print(f"    ERROR: {e}")
         return None
+    finally:
+        if cleanup and os.path.exists(cleanup):
+            os.remove(cleanup)
 
 
 def main():
-    obj_files = sorted(glob.glob(os.path.join(args.input, "**/*.obj"), recursive=True))
+    if args.ycb_only:
+        obj_files = sorted(glob.glob(os.path.join(args.input, "ycb_*", "*.obj")))
+    else:
+        obj_files = sorted(glob.glob(os.path.join(args.input, "**/*.obj"), recursive=True))
     print(f"Found {len(obj_files)} OBJ files in {args.input}")
 
     manifest_path = os.path.join(args.input, "manifest.json")
@@ -85,7 +112,7 @@ def main():
         rel = os.path.relpath(obj_path, args.input)
         usd_path = os.path.splitext(obj_path)[0] + ".usd"
 
-        if os.path.exists(usd_path):
+        if os.path.exists(usd_path) and not args.force:
             print(f"  [{i+1:3d}/{len(obj_files)}]  {rel}  (cached)")
             usd_paths[rel] = usd_path
             continue

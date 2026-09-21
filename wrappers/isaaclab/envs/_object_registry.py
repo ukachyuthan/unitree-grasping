@@ -26,6 +26,10 @@ PROCEDURAL_SHAPE_NAMES: list[str] = [
 def ycb_shape_names(split: str) -> list[str]:
     """Sorted, de-duplicated `ycb_*` family names present in a split's manifest.
 
+    Only families with a spawn-ready `000.usd` are returned — some YCB families
+    may have deformed instances (001+) but no graspable vanilla `000` after the
+    antipodal filter in generate_ycb_meshes.py.
+
     Returns an empty list if the manifest doesn't exist yet (e.g. before
     fetch_ycb.py / generate_ycb_meshes.py have been run) rather than raising,
     so importing this module never breaks a procedural-only checkout.
@@ -36,7 +40,17 @@ def ycb_shape_names(split: str) -> list[str]:
     with open(manifest_path) as f:
         manifest = json.load(f)
     names = {entry["family"] for entry in manifest if entry["family"].startswith("ycb_")}
-    return sorted(names)
+    ready = []
+    for name in sorted(names):
+        usd = data_path("data/objects", split, name, "000.usd")
+        if usd.exists():
+            ready.append(name)
+    skipped = sorted(names - set(ready))
+    if skipped:
+        print(f"[object_registry] Skipping {len(skipped)} YCB families in {split} "
+              f"with no 000.usd (no graspable vanilla instance): {skipped[:5]}"
+              f"{'...' if len(skipped) > 5 else ''}")
+    return ready
 
 
 def shape_split(shape_name: str) -> str:
