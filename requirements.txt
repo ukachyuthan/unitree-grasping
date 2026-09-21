@@ -20,8 +20,9 @@ pyyaml>=6.0
 tqdm>=4.65.0
 tensorboard>=2.13.0
 
-# ── Optional: GraspNet reward bootstrap ──────────────────────────────────────
-# contact-graspnet-pytorch  # install separately; see README for instructions
+# ── GraspNet reward bootstrap (on by default, see g1_grasp_env_cfg.use_graspnet_reward /
+#    grasp_pose_env_cfg.use_graspnet_reward) ───────────────────────────────────
+contact-graspnet-pytorch  # scripts/generate_graspnet_labels.py; needs a pretrained checkpoint
 
 # ── Dev ───────────────────────────────────────────────────────────────────────
 black>=23.0.0

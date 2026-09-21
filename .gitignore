@@ -27,6 +27,7 @@ MANIFEST
 venv/
 ENV/
 env/
+.venv/
 
 # IDE
 .vscode/
@@ -43,6 +44,7 @@ wrappers/isaaclab/data/
 data/checkpoints/*
 data/objects/*
 data/viz/*
+data/ycb_raw/*
 *.log
 runs/
 tensorboard_logs/
