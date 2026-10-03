@@ -27,8 +27,7 @@ from isaaclab.utils.math import (
     compute_pose_error,
 )
 
-from envs._paths import data_path
-from envs._object_registry import shape_split
+from envs._object_registry import shape_asset
 from envs.grasp_pose_env import GraspPoseEnv
 from envs.grasp_pose_env_cfg import N_APPROACH, N_CLOSE, N_DESCEND, N_LIFT, N_HOLD, N_TRANSPORT, N_LOWER, N_OPEN, EXEC_STEPS
 from envs.grasp_pose_residual_env_cfg import (
@@ -71,8 +70,8 @@ class GraspPoseResidualEnv(GraspPoseEnv):
         n_ok = 0
 
         for i, name in enumerate(self._shape_names):
-            g_path = data_path("data/objects", shape_split(name), name, "000_grasps.json")
-            pc_path = data_path("data/objects", shape_split(name), name, "000_pc.npy")
+            g_path = shape_asset(name, "_grasps.json")
+            pc_path = shape_asset(name, "_pc.npy")
             chosen = None
             if g_path.exists():
                 with open(g_path) as f:

@@ -53,11 +53,63 @@ def ycb_shape_names(split: str) -> list[str]:
     return ready
 
 
+# ── Mutated variants ──────────────────────────────────────────────────────────
+# generate_meshes.py / generate_ycb_meshes.py write N instances per family:
+# <family>/000.* (for YCB: the vanilla real mesh) and 001..N-1 (mutated
+# variants). Each instance is its own env "shape": instance 0 keeps the bare
+# family name (so existing checkpoints, replay queues and VR cases still match),
+# instance k>0 is "<family>.v<kkk>" — only [A-Za-z0-9_.-], which the VR app's
+# dataset server requires of case ids and file names.
+VARIANT_SEP = ".v"
+
+
+def variant_name(family: str, inst: int) -> str:
+    return family if inst == 0 else f"{family}{VARIANT_SEP}{inst:03d}"
+
+
+def split_variant(shape_name: str) -> tuple[str, int]:
+    """'ycb_006_mustard_bottle.v003' → ('ycb_006_mustard_bottle', 3); bare family → (family, 0)."""
+    family, sep, inst = shape_name.rpartition(VARIANT_SEP)
+    if sep and inst.isdigit():
+        return family, int(inst)
+    return shape_name, 0
+
+
 def shape_split(shape_name: str) -> str:
     """Which of data/objects/{train,eval} a shape's assets live under."""
-    if shape_name in PROCEDURAL_SHAPE_NAMES:
+    family, _ = split_variant(shape_name)
+    if family in PROCEDURAL_SHAPE_NAMES:
         return "train"
-    return "eval" if shape_name in ycb_shape_names("eval") else "train"
+    return "eval" if family in ycb_shape_names("eval") else "train"
+
+
+def shape_asset(shape_name: str, suffix: str):
+    """Path of one instance file, e.g. shape_asset('torus.v002', '_pc.npy') → .../torus/002_pc.npy."""
+    family, inst = split_variant(shape_name)
+    return data_path("data/objects", shape_split(shape_name), family, f"{inst:03d}{suffix}")
+
+
+def family_variants(family: str, max_variants: int | None = None) -> list[str]:
+    """Shape names for a family's spawn-ready instances: the family itself
+    (instance 000) first, then every mutated instance with a .usd on disk.
+
+    max_variants caps the total per family (None or <= 0 → all available).
+    Instances the generator's graspability gate discarded leave gaps in the
+    numbering; those are simply skipped.
+    """
+    split = shape_split(family)
+    family_dir = data_path("data/objects", split, family)
+    insts = sorted(
+        int(p.stem) for p in family_dir.glob("[0-9][0-9][0-9].usd") if int(p.stem) > 0
+    ) if family_dir.is_dir() else []
+    names = [family] + [variant_name(family, i) for i in insts]
+    if max_variants is not None and max_variants > 0:
+        names = names[:max_variants]
+    return names
+
+
+def expand_variants(families: list[str], max_variants: int | None = None) -> list[str]:
+    return [name for fam in families for name in family_variants(fam, max_variants)]
 
 
 def prim_name(shape_name: str) -> str:

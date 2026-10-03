@@ -61,6 +61,9 @@ parser.add_argument("--honest", action="store_true",
                     help="PD-only reach (ik_write_joint_state=False). Matches training/eval.")
 parser.add_argument("--use_real_objects", type=lambda s: s.lower() != "false", default=True,
                     help="Include YCB objects (match training distribution)")
+parser.add_argument("--variants_per_family", type=int, default=1,
+                    help="Instances per family to evaluate on. 1 (default) = original objects "
+                         "only, so --cycle_shapes stays one object per family; 0 = all variants.")
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 
@@ -81,8 +84,7 @@ bootstrap()
 
 from envs.grasp_pose_env_cfg import GraspPoseEnvCfg, OBS_DIM, NUM_ACTIONS, EXEC_STEPS
 from envs.grasp_pose_env import GraspPoseEnv
-from envs._paths import data_path
-from envs._object_registry import shape_split
+from envs._object_registry import shape_asset
 from models.grasp_pose_actor_critic import GraspPoseActorCritic
 
 
@@ -149,8 +151,8 @@ def antipodal_action_for_shape(shape: str, cfg: GraspPoseEnvCfg, device: str) ->
     import json
     import math
 
-    g_path = data_path("data/objects", shape_split(shape), shape, "000_grasps.json")
-    pc_path = data_path("data/objects", shape_split(shape), shape, "000_pc.npy")
+    g_path = shape_asset(shape, "_grasps.json")
+    pc_path = shape_asset(shape, "_pc.npy")
 
     x_lo, x_hi = cfg.grasp_x_bounds
     y_lo, y_hi = cfg.grasp_y_bounds
@@ -224,7 +226,7 @@ def center_action_for_shape(shape: str, cfg: GraspPoseEnvCfg, device: str) -> to
     """Path A: single grasp point at scaled PC centroid → tanh action (control smoke test)."""
     import numpy as np
 
-    pc_path = data_path("data/objects", shape_split(shape), shape, "000_pc.npy")
+    pc_path = shape_asset(shape, "_pc.npy")
     x_lo, x_hi = cfg.grasp_x_bounds
     y_lo, y_hi = cfg.grasp_y_bounds
     z_lo, z_hi = cfg.grasp_z_bounds
@@ -394,6 +396,7 @@ def main():
     env_cfg.scene.num_envs = args.num_envs
     env_cfg.sim.device = device
     env_cfg.use_real_objects = args.use_real_objects
+    env_cfg.variants_per_family = args.variants_per_family
     env_cfg.use_camera_pc = False
     env_cfg.visualize_grasp_point = args.visualize_grasp or args.video or not args.headless
     if args.cycle_shapes:

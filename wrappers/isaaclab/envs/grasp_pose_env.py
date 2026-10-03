@@ -38,8 +38,9 @@ from isaaclab.envs import DirectRLEnv
 from isaaclab.assets import Articulation, RigidObject
 from isaaclab.sensors import ContactSensor, ContactSensorCfg, TiledCamera, TiledCameraCfg
 
-from envs._paths import data_path
-from envs._object_registry import PROCEDURAL_SHAPE_NAMES, ycb_shape_names, shape_split
+from envs._object_registry import (
+    PROCEDURAL_SHAPE_NAMES, ycb_shape_names, shape_asset, expand_variants, prim_name,
+)
 from envs.grasp_pose_env_cfg import (
     GraspPoseEnvCfg,
     N_APPROACH, N_CLOSE, N_DESCEND, N_LIFT, N_HOLD, N_TRANSPORT, N_LOWER, N_OPEN, EXEC_STEPS,
@@ -102,7 +103,7 @@ class GraspPoseEnv(DirectRLEnv):
         # inside super().__init__() above) so self._objs already matches this order.
         pcs = []
         for name in self._shape_names:
-            p = data_path("data/objects", shape_split(name), name, "000_pc.npy")
+            p = shape_asset(name, "_pc.npy")
             if p.exists():
                 arr = np.load(str(p))  # (512, 3)
             else:
@@ -125,7 +126,7 @@ class GraspPoseEnv(DirectRLEnv):
             centers = np.zeros((_K_GN, 3), dtype=np.float32)
             quality = np.zeros((_K_GN,), dtype=np.float32)
             if self.cfg.use_graspnet_reward:
-                p = data_path("data/objects", shape_split(name), name, "000_graspnet.json")
+                p = shape_asset(name, "_graspnet.json")
                 if p.exists():
                     with open(p) as f:
                         gdata = json.load(f)
@@ -144,7 +145,7 @@ class GraspPoseEnv(DirectRLEnv):
         self._obj_graspnet_quality = torch.stack(gn_quality, dim=0).to(self.device)  # (NUM_SHAPES, _K_GN)
         if self.cfg.use_graspnet_reward and n_missing:
             print(f"[GraspPoseEnv] WARNING: {n_missing}/{len(self._shape_names)} shapes missing "
-                  f"000_graspnet.json — graspnet reward term is 0 for those until "
+                  f"<inst>_graspnet.json — graspnet reward term is 0 for those until "
                   f"scripts/generate_graspnet_labels.py is run.")
 
         # ── Per-env state ──────────────────────────────────────────────────────
@@ -397,9 +398,14 @@ class GraspPoseEnv(DirectRLEnv):
                       "objects found — falling back to procedural shapes.")
                 self._shape_names = list(PROCEDURAL_SHAPE_NAMES)
         else:
-            self._shape_names = list(PROCEDURAL_SHAPE_NAMES) + (
+            families = list(PROCEDURAL_SHAPE_NAMES) + (
                 ycb_shape_names("train") if self.cfg.use_real_objects else []
             )
+            # Each family contributes instance 000 plus its mutated variants
+            # (cfg.variants_per_family); every instance is a separately sampled shape.
+            self._shape_names = expand_variants(families, self.cfg.variants_per_family)
+            print(f"[GraspPoseEnv] {len(self._shape_names)} shapes from {len(families)} families "
+                  f"(variants_per_family={self.cfg.variants_per_family or 'all'})")
         self._num_shapes = len(self._shape_names)
 
         self._robot = Articulation(self.cfg.robot)
@@ -420,7 +426,11 @@ class GraspPoseEnv(DirectRLEnv):
                 prim_path=self.cfg.finger_contact_prim_path,
                 history_length=0,
                 track_air_time=False,
-                filter_prim_paths_expr=self.cfg.finger_contact_filter_paths,
+                # Only the spawned shapes: unspawned variants would match no prims.
+                filter_prim_paths_expr=[
+                    p for p in self.cfg.finger_contact_filter_paths
+                    if p.rsplit("/", 1)[-1] in {prim_name(n) for n in self._shape_names}
+                ],
             )
         )
         self.scene.sensors["finger_contact"] = self._finger_contact
@@ -854,7 +864,7 @@ class GraspPoseEnv(DirectRLEnv):
         self._obj_meshes = []
         n_missing = 0
         for name in self._shape_names:
-            obj_path = data_path("data/objects", shape_split(name), name, "000.obj")
+            obj_path = shape_asset(name, ".obj")
             if not obj_path.exists():
                 prox.append(None)
                 self._obj_meshes.append(None)
@@ -868,7 +878,7 @@ class GraspPoseEnv(DirectRLEnv):
         if n_missing:
             print(
                 f"[GraspPoseEnv] WARNING: {n_missing}/{len(self._shape_names)} shapes "
-                "missing 000.obj — those use PC snap for contact projection"
+                "missing their .obj — those use PC snap for contact projection"
             )
         return prox
 

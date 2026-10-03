@@ -23,8 +23,9 @@ from isaaclab.sim import SimulationCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
 
-from envs._paths import data_path
-from envs._object_registry import PROCEDURAL_SHAPE_NAMES, ycb_shape_names, prim_name
+from envs._object_registry import (
+    PROCEDURAL_SHAPE_NAMES, ycb_shape_names, prim_name, expand_variants, shape_asset, split_variant,
+)
 
 # ── Dimensions ────────────────────────────────────────────────────────────────
 NUM_PC_POINTS: int = 128
@@ -54,7 +55,9 @@ EXEC_STEPS  : int = (
 # filter and pre-declare RigidObjectCfg fields; harmless if some are unused
 # by a given run (use_real_objects=False, or eval-only play scripts).
 _ALL_YCB_NAMES = sorted(set(ycb_shape_names("train")) | set(ycb_shape_names("eval")))
-_ALL_SHAPE_NAMES_FOR_CONTACT = PROCEDURAL_SHAPE_NAMES + _ALL_YCB_NAMES
+# Every spawn-ready instance (000 + mutated variants) of every family; the env
+# spawns the subset selected by use_real_objects / variants_per_family.
+_ALL_SHAPE_NAMES_FOR_CONTACT = expand_variants(PROCEDURAL_SHAPE_NAMES + _ALL_YCB_NAMES)
 OBJECT_CONTACT_FILTER_PATHS = [
     f"/World/envs/env_.*/{prim_name(name)}" for name in _ALL_SHAPE_NAMES_FOR_CONTACT
 ]
@@ -66,8 +69,9 @@ def _auto_color(name: str) -> tuple[float, float, float]:
     return colorsys.hsv_to_rgb(h, 0.6, 0.85)
 
 
-def _usd_obj(name: str, color: tuple, split: str = "train") -> RigidObjectCfg:
-    usd_path = str(data_path("data/objects", split, name, "000.usd"))
+def _usd_obj(name: str, color: tuple, split: str | None = None) -> RigidObjectCfg:
+    """name is a shape (family or '<family>.v<kkk>' variant); split is resolved from it."""
+    usd_path = str(shape_asset(name, ".usd"))
     return RigidObjectCfg(
         prim_path=f"/World/envs/env_.*/{prim_name(name)}",
         init_state=RigidObjectCfg.InitialStateCfg(pos=(0.5, 0.0, -20.0)),
@@ -383,6 +387,15 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
     # ── Real-object dataset (scripts/fetch_ycb.py + generate_ycb_meshes.py) ───
     # False reproduces the original RNG-only training distribution exactly.
     use_real_objects: bool = True
+    # Instances per family loaded into training: 000 (for YCB the vanilla real
+    # mesh) plus mutated variants 001.. from generate_meshes.py /
+    # generate_ycb_meshes.py --n_per_family. Each is its own shape (own USD,
+    # point cloud, mesh, labels). 0 = every instance on disk; 1 = 000 only
+    # (default, so debug/eval scripts keep one shape per family;
+    # train_grasp_pose.py --variants_per_family defaults to 0).
+    # Every loaded instance is a rigid body in every env (parked underground
+    # when inactive), so this scales scene size ~linearly.
+    variants_per_family: int = 1
     # True: build only from ycb_shape_names("eval") (held-out real objects),
     # ignoring use_real_objects/procedural shapes — used by play scripts to
     # test zero-shot generalization on never-seen real objects.
@@ -404,6 +417,11 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
     def __post_init__(self):
         if hasattr(super(), "__post_init__"):
             super().__post_init__()
-        for name in _ALL_YCB_NAMES:
-            split = "eval" if name in ycb_shape_names("eval") else "train"
-            setattr(self, f"object_{name}", _usd_obj(name, _auto_color(name), split=split))
+        for name in _ALL_SHAPE_NAMES_FOR_CONTACT:
+            if hasattr(self, f"object_{name}"):
+                continue   # procedural instance 000: declared as a field above
+            # Variants share their family's color so a family reads as one object.
+            family, _ = split_variant(name)
+            color = getattr(self, f"object_{family}").spawn.visual_material.diffuse_color \
+                if family in PROCEDURAL_SHAPE_NAMES else _auto_color(family)
+            setattr(self, f"object_{name}", _usd_obj(name, color))

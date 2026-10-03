@@ -47,6 +47,9 @@ parser.add_argument("--pc_embed_dim",  type=int, default=128)
 parser.add_argument("--use_real_objects", type=lambda s: s.lower() != "false", default=True,
                     help="Include real (YCB-derived) objects alongside procedural shapes. "
                          "Pass --use_real_objects false to reproduce the original RNG-only run.")
+parser.add_argument("--variants_per_family", type=int, default=0,
+                    help="Instances per object family to train on: 000 plus mutated variants "
+                         "001.. from the mesh generators. 0 = all on disk, 1 = original only.")
 parser.add_argument("--path_a", action="store_true",
                     help="Path A action space: center + tilt + roll + width (not c1/c2).")
 parser.add_argument("--two_point", action="store_true",
@@ -94,7 +97,7 @@ from envs.grasp_pose_env_cfg import (
 )
 from envs.grasp_pose_env import GraspPoseEnv
 from models.grasp_pose_actor_critic import GraspPoseActorCritic
-from envs._object_registry import shape_split
+from envs._object_registry import shape_asset
 from envs._paths import data_path
 from training.vr_failures import FailureCurator, FailureCuratorConfig
 
@@ -148,7 +151,7 @@ def _make_failure_curator(u, run_name: str) -> FailureCurator | None:
     out_dir = args.vr_failures_dir or str(data_path("data/vr_failures"))
 
     def mesh_path(shape: str):
-        p = data_path("data/objects", shape_split(shape), shape, "000.obj")
+        p = shape_asset(shape, ".obj")
         return p if p.exists() else None
 
     table = u.cfg.table
@@ -418,6 +421,7 @@ def main():
     env_cfg.scene.num_envs = args.num_envs
     env_cfg.sim.device = device
     env_cfg.use_real_objects = args.use_real_objects
+    env_cfg.variants_per_family = args.variants_per_family
     if args.two_point:
         env_cfg.two_point_grasp = True
     elif args.path_a:
@@ -431,6 +435,7 @@ def main():
         env_cfg.contact_carry = False
         env_cfg.require_contact_for_lift_reward = True
     print(f"[grasp-pose-train] use_real_objects={args.use_real_objects}")
+    print(f"[grasp-pose-train] variants_per_family={args.variants_per_family or 'all'}")
     print(f"[grasp-pose-train] use_camera_pc={env_cfg.use_camera_pc}")
     print(f"[grasp-pose-train] simulation device={env_cfg.sim.device}")
     print(
