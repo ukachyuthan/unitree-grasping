@@ -35,7 +35,7 @@ from isaaclab.controllers.differential_ik import DifferentialIKController
 from isaaclab.controllers.differential_ik_cfg import DifferentialIKControllerCfg
 
 from isaaclab.envs import DirectRLEnv
-from isaaclab.assets import Articulation, RigidObject
+from isaaclab.assets import Articulation, RigidObject, RigidObjectCollection, RigidObjectCollectionCfg
 from isaaclab.sensors import ContactSensor, ContactSensorCfg, TiledCamera, TiledCameraCfg
 
 from envs._object_registry import (
@@ -63,6 +63,12 @@ class GraspPoseEnv(DirectRLEnv):
 
     def __init__(self, cfg: GraspPoseEnvCfg, render_mode=None):
         super().__init__(cfg, render_mode=render_mode)
+
+        # Batched object-collection bookkeeping (see _setup_scene).
+        self._all_env_ids = torch.arange(self.num_envs, device=self.device)
+        self._park_state_w = torch.zeros(self.num_envs, self._num_shapes, 13, device=self.device)
+        self._park_state_w[:, :, :3] = self._park_pos.unsqueeze(0) + self.scene.env_origins.unsqueeze(1)
+        self._park_state_w[:, :, 3] = 1.0   # identity quat (wxyz)
 
         # ── Joint indices (resolved after super().__init__ builds the scene) ──
         self._arm_dof_idx, _ = self._robot.find_joints(cfg.arm_joint_names)
@@ -100,7 +106,7 @@ class GraspPoseEnv(DirectRLEnv):
 
         # ── Pre-load object point clouds ──────────────────────────────────────
         # self._shape_names / self._num_shapes were set in _setup_scene() (called
-        # inside super().__init__() above) so self._objs already matches this order.
+        # inside super().__init__() above) so the object collection already matches this order.
         pcs = []
         for name in self._shape_names:
             p = shape_asset(name, "_pc.npy")
@@ -418,16 +424,23 @@ class GraspPoseEnv(DirectRLEnv):
         self._table = RigidObject(self.cfg.table)
         self.scene.rigid_objects["table"] = self._table
 
-        self._objs: list[RigidObject] = []
+        # All shapes live in ONE RigidObjectCollection (one PhysX view): object
+        # index i == self._shape_names[i]. Every env holds every shape; only
+        # self._env_shape[env] is on the table, the rest are parked underground.
+        # Reads/writes are batched over (env, shape) — with variants there are
+        # hundreds of shapes, and per-shape Python loops made each physics step
+        # cost hundreds of GPU syncs and PhysX calls.
+        obj_cfgs = {}
         for i, name in enumerate(self._shape_names):
-            obj_cfg = getattr(self.cfg, f"object_{name}").replace(
-                init_state=getattr(self.cfg, f"object_{name}").init_state.replace(
-                    pos=tuple(self._park_offset(i).tolist())
-                )
+            base = getattr(self.cfg, f"object_{name}")
+            obj_cfgs[prim_name(name)] = base.replace(
+                init_state=base.init_state.replace(pos=tuple(self._park_offset(i).tolist()))
             )
-            obj = RigidObject(obj_cfg)
-            self.scene.rigid_objects[name] = obj
-            self._objs.append(obj)
+        self._objects = RigidObjectCollection(RigidObjectCollectionCfg(rigid_objects=obj_cfgs))
+        self.scene.rigid_object_collections["objects"] = self._objects
+        self._park_pos = torch.stack(
+            [self._park_offset(i) for i in range(self._num_shapes)]
+        )  # (N, 3) env-local
 
         self._finger_contact = ContactSensor(
             ContactSensorCfg(
@@ -532,25 +545,16 @@ class GraspPoseEnv(DirectRLEnv):
         spawn_z = torch.full((n,), self.cfg.table_surface_z + self.cfg.spawn_z_offset, device=self.device)
         self._spawn_z[env_ids] = spawn_z   # record for reward computation
 
-        for i, obj in enumerate(self._objs):
-            pos = torch.zeros(n, 3, device=self.device)
-            mask = (self._env_shape[env_ids] == i)
-            if mask.any():
-                pos[mask, 0] = spawn_x[mask]
-                pos[mask, 1] = spawn_y[mask]
-                pos[mask, 2] = spawn_z[mask]
-            # Park underground, each shape in its own grid cell: stacked at one
-            # point, parked meshes collide with each other, which with variants
-            # (hundreds of shapes) overflows PhysX's GPU contact patch buffer.
-            pos[~mask] = self._park_offset(i)
-
-            default_state = obj.data.default_root_state[env_ids].clone()
-            default_state[:, :3] = (
-                pos + self.scene.env_origins[env_ids]
-            )
-            default_state[:, 3:7] = quat
-            default_state[:, 7:] = 0.0
-            obj.write_root_state_to_sim(default_state, env_ids=env_ids)
+        # Park every shape underground, each in its own grid cell (stacked at one
+        # point, parked meshes collide with each other, which with variants
+        # overflows PhysX's GPU contact patch buffer), then place the chosen one.
+        state = torch.zeros(n, 13, device=self.device)
+        state[:, 0] = spawn_x
+        state[:, 1] = spawn_y
+        state[:, 2] = spawn_z
+        state[:, :3] += self.scene.env_origins[env_ids]
+        state[:, 3:7] = quat
+        self._write_active_obj_state(state, env_ids)
 
         self._cache_object_anchors()
         self._spawn_z[env_ids] = self._obj_anchor[env_ids, 2]
@@ -661,26 +665,29 @@ class GraspPoseEnv(DirectRLEnv):
 
     def _constrain_settle_xy(self):
         """Keep active objects at spawn x/y/orientation; let physics update z only."""
-        for i, obj in enumerate(self._objs):
-            mask = (self._env_shape == i)
-            if not mask.any():
-                continue
-            state = obj.data.root_state_w[mask].clone()
-            anchor = self._obj_anchor[mask]
-            state[:, 0] = anchor[:, 0]      # pin x
-            state[:, 1] = anchor[:, 1]      # pin y
-            state[:, 3:7] = anchor[:, 3:7]  # pin orientation
-            state[:, 7:] = 0.0              # zero velocity
-            env_ids = mask.nonzero(as_tuple=False).squeeze(-1)
-            obj.write_root_state_to_sim(state, env_ids=env_ids)
+        state = self._active_obj_state().clone()
+        anchor = self._obj_anchor
+        state[:, 0] = anchor[:, 0]      # pin x
+        state[:, 1] = anchor[:, 1]      # pin y
+        state[:, 3:7] = anchor[:, 3:7]  # pin orientation
+        state[:, 7:] = 0.0              # zero velocity
+        self._write_active_obj_state(state, self._all_env_ids)
 
     def _cache_object_anchors(self):
         """Store settled root state of each env's active object."""
-        for i, obj in enumerate(self._objs):
-            mask = (self._env_shape == i)
-            if mask.any():
-                state = obj.data.root_state_w[mask]
-                self._obj_anchor[mask] = state
+        self._obj_anchor[:] = self._active_obj_state()
+
+    def _active_obj_state(self) -> torch.Tensor:
+        """(B, 13) world root state [pos, quat wxyz, lin vel, ang vel] of each env's active shape."""
+        return self._objects.data.object_state_w[self._all_env_ids, self._env_shape]
+
+    def _write_active_obj_state(self, state: torch.Tensor, env_ids: torch.Tensor):
+        """Set the active shape of each env in env_ids to state (n, 13), and hold
+        every other shape of those envs still at its parking cell — one batched
+        write for all (env, shape) pairs."""
+        full = self._park_state_w[env_ids].clone()                    # (n, N, 13)
+        full[torch.arange(len(env_ids), device=self.device), self._env_shape[env_ids]] = state
+        self._objects.write_object_state_to_sim(full, env_ids=env_ids)
 
     def _hold_hand_tuck(self):
         """Keep optional tucked joints fixed (unused on Franka parallel gripper)."""
@@ -710,26 +717,17 @@ class GraspPoseEnv(DirectRLEnv):
         if not in_contact.any():
             return
         ee_w = self._robot.data.body_pos_w[:, self._ee_body_idx, :3]
-        for i, obj in enumerate(self._objs):
-            mask = in_contact & (self._env_shape == i)
-            if not mask.any():
-                continue
-            pinned = self._obj_anchor[mask].clone()
-            pinned[:, :3] = ee_w[mask] + self._grasp_offset[mask]
-            pinned[:, 7:] = 0.0
-            env_ids = mask.nonzero(as_tuple=False).squeeze(-1)
-            obj.write_root_state_to_sim(pinned, env_ids=env_ids)
-            self._obj_anchor[mask] = pinned
+        env_ids = in_contact.nonzero(as_tuple=False).squeeze(-1)
+        pinned = self._obj_anchor[env_ids].clone()
+        pinned[:, :3] = ee_w[env_ids] + self._grasp_offset[env_ids]
+        pinned[:, 7:] = 0.0
+        self._write_active_obj_state(pinned, env_ids)
+        self._obj_anchor[env_ids] = pinned
 
     def _pin_objects(self):
-        for i, obj in enumerate(self._objs):
-            mask = (self._env_shape == i)
-            if not mask.any():
-                continue
-            pinned = self._obj_anchor[mask].clone()
-            pinned[:, 7:] = 0.0
-            env_ids = mask.nonzero(as_tuple=False).squeeze(-1)
-            obj.write_root_state_to_sim(pinned, env_ids=env_ids)
+        pinned = self._obj_anchor.clone()
+        pinned[:, 7:] = 0.0
+        self._write_active_obj_state(pinned, self._all_env_ids)
 
     # ── One agent step: store grasp target, reset execution counter ───────────
 
@@ -2424,12 +2422,7 @@ class GraspPoseEnv(DirectRLEnv):
 
     def _get_active_obj_pos(self) -> torch.Tensor:
         """Return world-frame position of the active object in each env."""
-        positions = torch.zeros(self.num_envs, 3, device=self.device)
-        for i, obj in enumerate(self._objs):
-            mask = (self._env_shape == i)
-            if mask.any():
-                positions[mask] = obj.data.root_pos_w[mask, :3]
-        return positions
+        return self._active_obj_state()[:, :3]
 
     # ── Rewards ───────────────────────────────────────────────────────────────
 

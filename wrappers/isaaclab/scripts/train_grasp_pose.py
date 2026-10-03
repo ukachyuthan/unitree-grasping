@@ -70,6 +70,10 @@ parser.add_argument("--vr_success_lift", type=float, default=1.0,
 parser.add_argument("--vr_warmup_iters", type=int, default=50,
                     help="Don't queue failures for the first N iterations (untrained policy).")
 parser.add_argument("--vr_max_cases", type=int, default=200)
+parser.add_argument("--render_interval", type=int, default=None,
+                    help="Physics steps between viewport redraws when running with the GUI "
+                         "(no --headless). Default renders once per grasp attempt, which shows "
+                         "only end states; e.g. 4 shows the arm moving, at some training speed cost.")
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 
@@ -427,6 +431,8 @@ def main():
     env_cfg.sim.device = device
     env_cfg.use_real_objects = args.use_real_objects
     env_cfg.variants_per_family = args.variants_per_family
+    if args.render_interval is not None:
+        env_cfg.sim.render_interval = args.render_interval
     if args.two_point:
         env_cfg.two_point_grasp = True
     elif args.path_a:

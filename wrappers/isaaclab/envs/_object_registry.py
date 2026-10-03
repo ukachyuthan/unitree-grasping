@@ -11,6 +11,7 @@ objects never requires touching env/cfg code — only regenerating the dataset.
 
 from __future__ import annotations
 
+import functools
 import json
 import re
 
@@ -24,6 +25,11 @@ PROCEDURAL_SHAPE_NAMES: list[str] = [
 
 
 def ycb_shape_names(split: str) -> list[str]:
+    return list(_ycb_shape_names_cached(split))
+
+
+@functools.lru_cache(maxsize=None)
+def _ycb_shape_names_cached(split: str) -> tuple[str, ...]:
     """Sorted, de-duplicated `ycb_*` family names present in a split's manifest.
 
     Only families with a spawn-ready `000.usd` are returned — some YCB families
@@ -36,7 +42,7 @@ def ycb_shape_names(split: str) -> list[str]:
     """
     manifest_path = data_path("data/objects", split, "manifest.json")
     if not manifest_path.exists():
-        return []
+        return ()
     with open(manifest_path) as f:
         manifest = json.load(f)
     names = {entry["family"] for entry in manifest if entry["family"].startswith("ycb_")}
@@ -50,7 +56,7 @@ def ycb_shape_names(split: str) -> list[str]:
         print(f"[object_registry] Skipping {len(skipped)} YCB families in {split} "
               f"with no 000.usd (no graspable vanilla instance): {skipped[:5]}"
               f"{'...' if len(skipped) > 5 else ''}")
-    return ready
+    return tuple(ready)
 
 
 # ── Mutated variants ──────────────────────────────────────────────────────────

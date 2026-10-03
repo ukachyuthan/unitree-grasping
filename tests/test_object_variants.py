@@ -16,7 +16,9 @@ VR_SEGMENT = re.compile(r"^[A-Za-z0-9_.-]+$")
 @pytest.fixture
 def objects_root(tmp_path, monkeypatch):
     monkeypatch.setattr(reg, "data_path", lambda *parts: tmp_path.joinpath(*parts))
-    return tmp_path / "data" / "objects"
+    reg._ycb_shape_names_cached.cache_clear()
+    yield tmp_path / "data" / "objects"
+    reg._ycb_shape_names_cached.cache_clear()
 
 
 def touch(root, split, family, *files):
