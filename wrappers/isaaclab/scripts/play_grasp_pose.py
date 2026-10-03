@@ -523,7 +523,9 @@ def main():
 
         r = rew.mean().item()
         total_reward += r
-        if r >= 0.5:
+        # Success = object lifted to lift_target_m; shaping reward never counts.
+        lift_ok = bool(u._last_lift_success[0].item())
+        if lift_ok:
             successes += 1
         # Keep the shape used for this episode (reset inside step advances the cycle).
         dec = _decode_action(action, env_cfg)
@@ -534,8 +536,8 @@ def main():
             width_m = float(u._grasp_width[0].item())
             c1, c2 = c1_t, c2_t
             print(
-                f"  ep {ep:3d}/{args.num_episodes}  shape={shape:14s}  reward={r:.0f}  "
-                f"lift_ok={r >= 0.5}  "
+                f"  ep {ep:3d}/{args.num_episodes}  shape={shape:14s}  reward={r:.3f}  "
+                f"lift_ok={lift_ok}  "
                 f"c1=({c1[0]:+.3f},{c1[1]:+.3f},{c1[2]:+.3f})  "
                 f"c2=({c2[0]:+.3f},{c2[1]:+.3f},{c2[2]:+.3f})  "
                 f"width={width_m:.3f}m  "
@@ -557,8 +559,8 @@ def main():
         else:
             g = dec["grasp_local"]
             print(
-                f"  ep {ep:3d}/{args.num_episodes}  shape={shape:14s}  reward={r:.0f}  "
-                f"lift_ok={r >= 0.5}  "
+                f"  ep {ep:3d}/{args.num_episodes}  shape={shape:14s}  reward={r:.3f}  "
+                f"lift_ok={lift_ok}  "
                 f"raw=({g[0]:+.3f},{g[1]:+.3f},{g[2]:+.3f})  "
                 f"tilt={dec['tilt_rad']:+.2f}rad  width={dec['width_m']:.3f}m  "
                 f"finger_err={fe*100:.1f}cm  palm_err={pe*100:.1f}cm"
@@ -566,7 +568,8 @@ def main():
 
     n = args.num_episodes
     print(f"\n[play] mean_reward={total_reward/n:.3f}  "
-          f"success_rate={100*successes/n:.1f}%  (binary: 1=lifted ≥3cm)")
+          f"success_rate={100*successes/n:.1f}%  "
+          f"(object lifted ≥ lift_target_m={env_cfg.lift_target_m*100:.0f}cm)")
     if finger_errs:
         import statistics as _stats
         print(

@@ -55,7 +55,7 @@ class FailureCuratorConfig:
     # Failed replays before a queued failure becomes a dataset case.
     fail_threshold: int = 4
     # An attempt succeeds when lift_reward (fraction of lift_target_m) reaches this.
-    success_lift: float = 0.5
+    success_lift: float = 1.0   # lift fraction; 1.0 = object reached the lift target
     # Per env, per step: probability the next episode is a replay (when the queue has one).
     replay_prob: float = 0.1
     # When full, new failures are turned away rather than evicting queued ones:

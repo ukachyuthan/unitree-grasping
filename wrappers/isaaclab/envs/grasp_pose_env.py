@@ -169,6 +169,10 @@ class GraspPoseEnv(DirectRLEnv):
         self._grasp_locked = torch.zeros(B, dtype=torch.bool, device=self.device)
         self._grasp_offset = torch.zeros(B, 3, device=self.device)   # obj - ee at close
         self._last_lift_reward     = torch.zeros(B, device=self.device)
+        # The ONLY success criterion: the object reached lift_target_m (with finger
+        # contact when require_contact_for_lift_reward). Every other reward term is
+        # shaping and never counts towards success.
+        self._last_lift_success    = torch.zeros(B, dtype=torch.bool, device=self.device)
         self._last_leg_still       = torch.zeros(B, device=self.device)
         self._last_contact_reward  = torch.zeros(B, device=self.device)
         self._last_place_reward    = torch.zeros(B, device=self.device)
@@ -415,8 +419,12 @@ class GraspPoseEnv(DirectRLEnv):
         self.scene.rigid_objects["table"] = self._table
 
         self._objs: list[RigidObject] = []
-        for name in self._shape_names:
-            obj_cfg = getattr(self.cfg, f"object_{name}")
+        for i, name in enumerate(self._shape_names):
+            obj_cfg = getattr(self.cfg, f"object_{name}").replace(
+                init_state=getattr(self.cfg, f"object_{name}").init_state.replace(
+                    pos=tuple(self._park_offset(i).tolist())
+                )
+            )
             obj = RigidObject(obj_cfg)
             self.scene.rigid_objects[name] = obj
             self._objs.append(obj)
@@ -531,7 +539,10 @@ class GraspPoseEnv(DirectRLEnv):
                 pos[mask, 0] = spawn_x[mask]
                 pos[mask, 1] = spawn_y[mask]
                 pos[mask, 2] = spawn_z[mask]
-            pos[~mask, 2] = -20.0   # park underground
+            # Park underground, each shape in its own grid cell: stacked at one
+            # point, parked meshes collide with each other, which with variants
+            # (hundreds of shapes) overflows PhysX's GPU contact patch buffer.
+            pos[~mask] = self._park_offset(i)
 
             default_state = obj.data.default_root_state[env_ids].clone()
             default_state[:, :3] = (
@@ -595,6 +606,21 @@ class GraspPoseEnv(DirectRLEnv):
             self.scene.write_data_to_sim()
             self.sim.step(render=True)
             self.scene.update(dt=self.physics_dt)
+
+    _PARK_SPACING_M = 0.4   # > largest scaled object diagonal (11 cm × 1.5 scale, +15% jitter)
+    _PARK_GRID = 8          # cells per side per layer
+
+    def _park_offset(self, shape_idx: int) -> torch.Tensor:
+        """Env-local parking position for an inactive shape (8×8 grid per layer
+        at z=-20, layers stacked downward). Cross-env collisions are filtered,
+        so the grid may extend past env_spacing."""
+        g, s = self._PARK_GRID, self._PARK_SPACING_M
+        layer, cell = divmod(shape_idx, g * g)
+        row, col = divmod(cell, g)
+        return torch.tensor(
+            [(col - (g - 1) / 2) * s, (row - (g - 1) / 2) * s, -20.0 - layer * s],
+            device=self.device,
+        )
 
     def queue_replays(self, env_ids, shape_ids, xy, quat_wxyz):
         """Make the next reset of each env in env_ids re-spawn a given case.
@@ -2486,6 +2512,7 @@ class GraspPoseEnv(DirectRLEnv):
         leg_still = torch.ones(self.num_envs, device=self.device)  # no legs on Franka
 
         self._last_lift_reward     = lift_r
+        self._last_lift_success    = lift_r >= 1.0   # lift_r is capped at 1.0 = target reached
         self._last_contact_reward  = contact_r
         self._last_place_reward    = place_r
         self._last_graspnet_reward = graspnet_r

@@ -64,8 +64,9 @@ parser.add_argument("--vr_replay_prob", type=float, default=0.1,
                     help="Per env per step: chance the next episode replays a queued failure.")
 parser.add_argument("--vr_queue_capacity", type=int, default=512,
                     help="Replay queue size; the oldest failures are dropped when full.")
-parser.add_argument("--vr_success_lift", type=float, default=0.5,
-                    help="lift_reward fraction at or above which an attempt counts as a success.")
+parser.add_argument("--vr_success_lift", type=float, default=1.0,
+                    help="lift_reward fraction at or above which an attempt counts as a success "
+                         "(1.0 = object reached lift_target_m, the training success criterion).")
 parser.add_argument("--vr_warmup_iters", type=int, default=50,
                     help="Don't queue failures for the first N iterations (untrained policy).")
 parser.add_argument("--vr_max_cases", type=int, default=200)
@@ -210,7 +211,7 @@ def ppo_update(ac, optimizer, obs, actions, old_logp, returns, advantages,
 
 
 def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=None,
-              curator=None, success_threshold=0.25, lr=3e-4,
+              curator=None, lr=3e-4,
               num_steps_per_env=16, num_epochs=5, num_mini_batches=4,
               clip_param=0.2, value_coef=1.0, entropy_coef=0.02,
               max_grad_norm=1.0, save_interval=25):
@@ -221,6 +222,7 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
 
     for it in range(1, max_iters + 1):
         obs_buf, act_buf, logp_buf, rew_buf, val_buf = [], [], [], [], []
+        success_buf = []   # per episode: object reached the lift target (env._last_lift_success)
 
         obs_td = env.get_observations()
         for _ in range(num_steps_per_env):
@@ -248,6 +250,7 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
             act_buf.append(actions)
             logp_buf.append(logp)
             rew_buf.append(rew.to(device))
+            success_buf.append(env.unwrapped._last_lift_success.to(device))
             val_buf.append(values)
 
         obs_all = torch.cat(obs_buf, dim=0)
@@ -279,7 +282,9 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
         std_rew = rew_all.std(unbiased=False).item()
         min_rew = rew_all.min().item()
         max_rew = rew_all.max().item()
-        success_rate = (rew_all >= success_threshold).float().mean().item()
+        # Success = object lifted to the target; shaping terms (contact, surface,
+        # graspnet, place) never count, however much reward they add.
+        success_rate = torch.cat(success_buf).float().mean().item()
         mean_value = val_all.mean().item()
         mean_return = returns.mean().item()
         mean_adv = advantages.mean().item()

@@ -157,12 +157,14 @@ def main():
         capture = args.video and ep <= args.video_episodes
         lift_r, frames = rollout_episode(env, policy, device, capture_video=capture)
         total_lift += lift_r
-        if lift_r >= 0.5:
+        # Success = object reached lift_target_m (contact-gated, same as training).
+        lift_ok = bool(env.unwrapped._last_lift_success[0].item())
+        if lift_ok:
             successes += 1
         if capture:
             all_frames.extend(frames)
         shape = _SHAPE_NAMES[env.unwrapped._env_shape[0].item()]
-        print(f"  ep {ep:3d}/{args.num_episodes}  shape={shape:14s}  lift_r={lift_r:.3f}  ok={lift_r >= 0.5}")
+        print(f"  ep {ep:3d}/{args.num_episodes}  shape={shape:14s}  lift_r={lift_r:.3f}  ok={lift_ok}")
 
     n = args.num_episodes
     print(f"\n[play-residual] mean_lift={total_lift/n:.3f}  success_rate={100*successes/n:.1f}%")

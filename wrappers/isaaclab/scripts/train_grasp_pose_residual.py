@@ -130,7 +130,7 @@ def _set_grasp_trainable(ac: GraspPoseResidualActorCritic, trainable: bool):
 
 
 def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=None,
-              success_threshold=0.5, lr=3e-4,
+              lr=3e-4,
               num_steps_per_env=48, num_epochs=5, num_mini_batches=4,
               clip_param=0.2, value_coef=0.5, entropy_coef=0.005,
               max_grad_norm=1.0, save_interval=25, gamma=0.99, lam=0.95,
@@ -148,6 +148,7 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
                 print(f"[residual-train] unfreezing grasp head at iter {it}")
 
         obs_buf, act_buf, logp_buf, rew_buf, val_buf, done_buf = [], [], [], [], [], []
+        success_buf = []   # env._last_lift_success: object reached the lift target
 
         obs_td = env.get_observations()
         for _ in range(num_steps_per_env):
@@ -167,6 +168,7 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
             rew_buf.append(rew.to(device))
             val_buf.append(values)
             done_buf.append(done.to(device).float())
+            success_buf.append(env.unwrapped._last_lift_success.to(device))
 
         obs_all = torch.cat(obs_buf, dim=0)
         act_all = torch.cat(act_buf, dim=0)
@@ -199,11 +201,12 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
         mean_rew = rew_all.mean().item()
         std_rew = rew_all.std(unbiased=False).item()
 
-        # Success = terminal sparse lift reward (dense steps are ~0.02–0.15).
+        # Success = object reached the lift target at episode end; shaping
+        # (reach, contact, dense lift) never counts.
         done_flat = done_stacked.reshape(-1) > 0.5
         terminal_rew = rew_all[done_flat]
         if terminal_rew.numel() > 0:
-            success_rate = (terminal_rew >= success_threshold).float().mean().item()
+            success_rate = torch.stack(success_buf).reshape(-1)[done_flat].float().mean().item()
             mean_terminal = terminal_rew.mean().item()
         else:
             success_rate = 0.0
