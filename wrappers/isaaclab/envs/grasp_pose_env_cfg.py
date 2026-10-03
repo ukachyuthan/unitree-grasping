@@ -252,6 +252,12 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
     two_point_approach_clearance_m: float = 0.060
     # Height after descend, right before pinch (0 = at contact mid).
     two_point_final_clearance_m: float = 0.0
+    # Finger body origin → pad centre along hand +Z. Finger links' origins are at
+    # their base (hand +5.84 cm); pads centre ~4.5 cm lower (hand +10.3 cm, the
+    # Franka TCP). Contact targets, reach errors and the position-only DiffIK all
+    # use the pad centres — using the origins put the pads ~4.5 cm below the
+    # predicted contacts (gripping the object's base, or the table).
+    finger_pad_offset_m: float = 0.045
     # Hover may early-exit only when |finger·jaw| is at least this (yaw settled).
     two_point_hover_jaw_align: float = 0.85
     # If True, policy tilt pitches the approach axis (can put palm target off to the

@@ -241,7 +241,7 @@ class GraspPoseEnv(DirectRLEnv):
         self._eval_shape_step = 0
         self._arm_q_des = self._home_joint_pos[:, self._arm_dof_idx].clone()
         self._arm_q_hold = self._arm_q_des.clone()
-        self._arm_q_lift_end = self._arm_q_des.clone()
+        self._lift_start_w = torch.zeros(B, 3, device=self.device)
         # Filled at end of approach for IK diagnostics (play / debug).
         self._ik_finger_err = torch.zeros(B, device=self.device)
         self._ik_palm_err = torch.zeros(B, device=self.device)
@@ -1051,9 +1051,27 @@ class GraspPoseEnv(DirectRLEnv):
     def _palm_actual_w(self) -> torch.Tensor:
         return self._robot.data.body_pos_w[:, self._ee_body_idx, :3]
 
+    def _finger_pad_offset_w(self) -> torch.Tensor:
+        """(B, 3) world vector from a finger body origin to its pad centre: the
+        finger links' origins sit at their base, ~4.5 cm above the pads, along
+        hand +Z (toward the fingertips)."""
+        hand_z = quat_rotate(
+            self._robot.data.body_quat_w[:, self._ee_body_idx],
+            torch.tensor([0.0, 0.0, 1.0], device=self.device).expand(self.num_envs, -1),
+        )
+        return hand_z * self.cfg.finger_pad_offset_m
+
+    def _finger_pads_w(self) -> tuple[torch.Tensor, torch.Tensor]:
+        """World positions of the left / right finger pad centres — the points
+        that actually touch the object, and what contact targets refer to."""
+        off = self._finger_pad_offset_w()
+        return (
+            self._robot.data.body_pos_w[:, self._left_finger_idx, :3] + off,
+            self._robot.data.body_pos_w[:, self._right_finger_idx, :3] + off,
+        )
+
     def _finger_midpoint_w(self) -> torch.Tensor:
-        left = self._robot.data.body_pos_w[:, self._left_finger_idx, :3]
-        right = self._robot.data.body_pos_w[:, self._right_finger_idx, :3]
+        left, right = self._finger_pads_w()
         return 0.5 * (left + right)
 
     def _jaw_axis_w(self) -> torch.Tensor:
@@ -1460,6 +1478,9 @@ class GraspPoseEnv(DirectRLEnv):
         J_l = J[:, self._left_finger_jac_idx, :3, :][:, :, self._arm_dof_idx]
         J_r = J[:, self._right_finger_jac_idx, :3, :][:, :, self._arm_dof_idx]
         J_pos = 0.5 * (J_l + J_r)
+        # Pads are offset r from the finger origins: v_pad = v_finger + ω × r.
+        J_ang = J[:, self._left_finger_jac_idx, 3:, :][:, :, self._arm_dof_idx]
+        J_pos = J_pos + torch.bmm(-skew_symmetric_matrix(self._finger_pad_offset_w()), J_ang)
         base_rot = self._robot.data.root_pose_w[:, 3:7]
         base_rot_matrix = matrix_from_quat(quat_inv(base_rot))
         return torch.bmm(base_rot_matrix, J_pos)
@@ -1467,8 +1488,7 @@ class GraspPoseEnv(DirectRLEnv):
     def _finger_contact_errors(self, clearance_m: float = 0.0) -> tuple[torch.Tensor, torch.Tensor]:
         """Per-finger distance to assigned contact target (+ clearance along +Z)."""
         left_tgt, right_tgt = self._finger_contact_targets_w(clearance_m=clearance_m)
-        left = self._robot.data.body_pos_w[:, self._left_finger_idx, :3]
-        right = self._robot.data.body_pos_w[:, self._right_finger_idx, :3]
+        left, right = self._finger_pads_w()
         return (left - left_tgt).norm(dim=-1), (right - right_tgt).norm(dim=-1)
 
     def _servo_fingers_to_grasp(self, clearance_m: float = 0.0):
@@ -1482,8 +1502,7 @@ class GraspPoseEnv(DirectRLEnv):
                     self._diff_ik_to_pose_w(mid_tgt, quat_tgt)
                 return
             # Yaw already locked at grasp decision — only servo position.
-            left = self._robot.data.body_pos_w[:, self._left_finger_idx, :3]
-            right = self._robot.data.body_pos_w[:, self._right_finger_idx, :3]
+            left, right = self._finger_pads_w()
             palm = self._palm_actual_w()
             palm_tgt = palm + 0.5 * ((left_tgt - left) + (right_tgt - right))
             for _ in range(self.cfg.ik_approach_substeps):
@@ -1832,15 +1851,25 @@ class GraspPoseEnv(DirectRLEnv):
             ee_quat,
             torch.tensor([0.0, 0.0, 1.0], device=self.device).expand(self.num_envs, -1),
         )
-        # +j7 about hand +Z; with top-down Franka hand +Z ≈ −world +Z.
-        j7_delta = -delta_w * torch.sign(hand_z[:, 2]).clamp(min=-1.0)
+        # +j7 turns the jaw about hand +Z, i.e. by hand_z.z about world +Z (top-down
+        # Franka: hand +Z ≈ −world Z, so +j7 = −world yaw). To turn the fingers by
+        # +delta_w about world Z, j7 must move delta_w · sign(hand_z.z). (This was
+        # negated, which drove j7 away from the jaw and into its joint limit.)
+        j7_delta = delta_w * torch.sign(hand_z[:, 2])
         flat = hand_z[:, 2].abs() < 0.3
         jaw = self._two_point_jaw_xy_w()
         jaw_h = quat_rotate(quat_inv(ee_quat), jaw)
         err_h = torch.atan2(jaw_h[:, 0], jaw_h[:, 1])
         j7_delta = torch.where(flat, err_h, j7_delta)
         j7 = self._robot.data.joint_pos[:, self._arm_dof_idx][:, self._roll_arm_idx]
-        self._roll_target = j7 + j7_delta
+        # A parallel-jaw grasp is symmetric under a 180° turn (fingers swap), so if
+        # the target is past a j7 limit use the equivalent angle π away instead.
+        lo = self._robot.data.soft_joint_pos_limits[:, self._arm_dof_idx[self._roll_arm_idx], 0]
+        hi = self._robot.data.soft_joint_pos_limits[:, self._arm_dof_idx[self._roll_arm_idx], 1]
+        target = j7 + j7_delta
+        target = torch.where(target > hi, target - math.pi, target)
+        target = torch.where(target < lo, target + math.pi, target)
+        self._roll_target = target
 
     def _lock_two_point_wrist_yaw(self):
         """Deprecated: lock jaw sign + solve j7 from current hand."""
@@ -1909,8 +1938,7 @@ class GraspPoseEnv(DirectRLEnv):
     def _record_contact_reach(self, *, after_close: bool):
         """Per-finger distance to the two contact targets (optimal assignment)."""
         c_l, c_r = self._predicted_contacts_w(for_viz=False)
-        left = self._robot.data.body_pos_w[:, self._left_finger_idx, :3]
-        right = self._robot.data.body_pos_w[:, self._right_finger_idx, :3]
+        left, right = self._finger_pads_w()
         # Match fingers→contacts with the lower total distance (handles wrist flip).
         d_ll = (left - c_l).norm(dim=-1)
         d_lr = (left - c_r).norm(dim=-1)
@@ -2157,24 +2185,27 @@ class GraspPoseEnv(DirectRLEnv):
         return n_touch >= self.cfg.min_contact_fingers
 
     def _do_lift(self):
-        """Lift: one-shot finger-mid IK to raised height, then joint interpolation."""
+        """Lift: servo the finger pads straight up along a smooth ramp, one IK step
+        per physics step (as in approach/descend), then hold where the lift ended.
+
+        Previously a single IK step at lift start (clamped to diff_ik_max_joint_step)
+        set the end pose, which only raised the hand ~2 cm of lift_height_m, and the
+        hold phase then returned to the pre-lift pose, setting the object back down.
+        """
         lift_start = N_APPROACH + N_DESCEND + N_CLOSE
-        if self._exec_step == lift_start:
-            self._arm_q_hold = self._robot.data.joint_pos[:, self._arm_dof_idx].clone()
-            lift_tgt = self._grasp_point_world().clone()
-            lift_tgt[:, 2] += self.cfg.lift_height_m
-            self._ik_finger_mid_to(lift_tgt)
-            self._arm_q_lift_end = self._arm_q_des.clone()
-            lo = self._robot.data.soft_joint_pos_limits[:, self._arm_dof_idx, 0]
-            hi = self._robot.data.soft_joint_pos_limits[:, self._arm_dof_idx, 1]
-            self._arm_q_lift_end = self._arm_q_lift_end.clamp(lo, hi)
-        k = (self._exec_step - lift_start) + 1
-        t = _smoothstep(k / max(N_LIFT, 1))
-        q = (1.0 - t) * self._arm_q_hold + t * self._arm_q_lift_end
-        self._robot.set_joint_position_target(q, joint_ids=self._arm_dof_idx)
+        k = self._exec_step - lift_start
+        if k == 0:
+            self._lift_start_w = self._finger_midpoint_w().clone()
+        t = _smoothstep((k + 1) / max(N_LIFT, 1))
+        lift_tgt = self._lift_start_w.clone()
+        lift_tgt[:, 2] += self.cfg.lift_height_m * t
+        self._ik_finger_mid_to(lift_tgt)
         self._robot.set_joint_position_target(
             self._gripper_close_target, joint_ids=self._grip_dof_idx
         )
+        if k + 1 >= N_LIFT:
+            # Hold / transport keep the arm where the lift ended, not where it started.
+            self._arm_q_hold = self._arm_q_des.clone()
 
     # ── Camera helpers ────────────────────────────────────────────────────────
 
@@ -2445,8 +2476,7 @@ class GraspPoseEnv(DirectRLEnv):
         grasps and encourages both fingers to be in contact with the object surface.
         """
         pc_local = self._obj_pcs[self._env_shape]   # (B, 512, 3) object-local, scaled
-        lf_w = self._robot.data.body_pos_w[:, self._left_finger_idx, :3]
-        rf_w = self._robot.data.body_pos_w[:, self._right_finger_idx, :3]
+        lf_w, rf_w = self._finger_pads_w()
         obj_w = self._get_active_obj_pos()          # (B, 3)
 
         inv_q = quat_inv(self._grasp_origin_quat)   # (B, 4)

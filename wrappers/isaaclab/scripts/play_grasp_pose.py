@@ -64,6 +64,10 @@ parser.add_argument("--use_real_objects", type=lambda s: s.lower() != "false", d
 parser.add_argument("--variants_per_family", type=int, default=1,
                     help="Instances per family to evaluate on. 1 (default) = original objects "
                          "only, so --cycle_shapes stays one object per family; 0 = all variants.")
+parser.add_argument("--record", type=str, default=None,
+                    help="Headless alternative to --video: save env 0's state every physics step "
+                         "for the first --video_episodes episodes to this .npz, then render it "
+                         "with scripts/render_recording.py (no RTX renderer needed).")
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 
@@ -86,6 +90,7 @@ from envs.grasp_pose_env_cfg import GraspPoseEnvCfg, OBS_DIM, NUM_ACTIONS, EXEC_
 from envs.grasp_pose_env import GraspPoseEnv
 from envs._object_registry import shape_asset
 from models.grasp_pose_actor_critic import GraspPoseActorCritic
+from state_recorder import StateRecorder
 
 
 def _norm_axis(x: float, lo: float, hi: float) -> float:
@@ -341,11 +346,13 @@ def _decode_action(action: torch.Tensor, cfg: GraspPoseEnvCfg) -> dict:
     }
 
 
-def rollout_dense_frames(env: GraspPoseEnv, action: torch.Tensor) -> list:
-    """Step physics manually and capture an rgb frame each sub-step."""
+def rollout_dense_frames(env: GraspPoseEnv, action: torch.Tensor, recorder=None, shape=None) -> list:
+    """Step physics manually and capture an rgb frame (and/or recorder state) each sub-step."""
     u = env.unwrapped
     u._pre_physics_step(action)
     grasp_used = u._grasp_target[0].detach().cpu().clone()
+    if recorder is not None:
+        recorder.begin_episode(shape)
     capture = u.render_mode == "rgb_array"
     is_rendering = capture or u.sim.has_gui() or u.sim.has_rtx_sensors()
     frames = []
@@ -361,6 +368,8 @@ def rollout_dense_frames(env: GraspPoseEnv, action: torch.Tensor) -> list:
                 if frame is not None and frame.size > 0 and frame.any():
                     frames.append(frame)
         u.scene.update(dt=u.physics_dt)
+        if recorder is not None:
+            recorder.capture()
 
     rew = u._get_rewards()
     done_ids = torch.arange(u.num_envs, device=u.device)
@@ -470,6 +479,7 @@ def main():
           f"use_real_objects={args.use_real_objects}  action_dim={n_act}")
 
     obs_dict, _ = env.reset()
+    recorder = StateRecorder(env) if args.record else None
     successes, total_reward = 0, 0.0
     video_frames: list = []
     finger_errs, palm_errs, jaw_aligns = [], [], []
@@ -497,8 +507,10 @@ def main():
                 action = policy.act_inference(obs)
 
         grasp_used = None
-        if args.video and ep <= args.video_episodes:
-            frames, rew, grasp_used = rollout_dense_frames(env, action)
+        if (args.video or recorder is not None) and ep <= args.video_episodes:
+            frames, rew, grasp_used = rollout_dense_frames(env, action, recorder, shape)
+            if recorder is not None:
+                recorder.end_episode()
             video_frames.extend(frames)
             obs_dict = env._get_observations()
         else:
@@ -585,6 +597,10 @@ def main():
             f"mean_finger→contact={100*_stats.mean(close_errs):.1f}±"
             f"{100*_stats.pstdev(close_errs):.1f}cm"
         )
+
+    if recorder is not None:
+        os.makedirs(os.path.dirname(os.path.abspath(args.record)), exist_ok=True)
+        recorder.save(os.path.abspath(args.record))
 
     if args.video and video_frames:
         write_mp4(video_frames, os.path.abspath(args.out))
