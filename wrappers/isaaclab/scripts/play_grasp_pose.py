@@ -73,6 +73,8 @@ parser.add_argument("--no_exec_noise", action="store_true",
 parser.add_argument("--grasp_mode", type=str, default="six_dof", choices=["six_dof", "top_down"],
                     help="six_dof: contacts + approach angle, any orientation (7-D action). "
                          "top_down: the earlier vertical-palm contact-pair mode (6-D).")
+parser.add_argument("--eval_objects", action="store_true",
+                    help="Use only the held-out YCB eval objects (data/objects/eval), never seen in training.")
 parser.add_argument("--debug_rank", type=int, default=0,
                     help="--debug_action graspnet: which Contact-GraspNet grasp to execute (0 = best).")
 parser.add_argument("--debug_psi", type=float, default=0.0,
@@ -100,7 +102,7 @@ from bootstrap import bootstrap
 
 bootstrap()
 
-from envs.grasp_pose_env_cfg import GraspPoseEnvCfg, OBS_DIM, NUM_ACTIONS, EXEC_STEPS
+from envs.grasp_pose_env_cfg import GraspPoseEnvCfg, OBS_DIM, EXEC_STEPS
 from envs.grasp_pose_env import GraspPoseEnv
 from envs._object_registry import shape_asset
 from models.grasp_pose_actor_critic import GraspPoseActorCritic
@@ -282,13 +284,21 @@ def center_action_for_shape(shape: str, cfg: GraspPoseEnvCfg, device: str) -> to
     return torch.tensor([vals], dtype=torch.float32, device=device)
 
 
-def load_policy(ckpt_path: str, device: str) -> GraspPoseActorCritic:
+def load_policy(ckpt_path: str, device: str, num_actions: int) -> GraspPoseActorCritic:
+    """Load an RL checkpoint ({"model": state_dict}) or a BC warm-start
+    checkpoint ({"encoder", "head"}, scripts/pretrain_grasp_*.py) as the actor."""
     ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
-    state = ckpt.get("model", ckpt)
+    if "encoder" in ckpt and "head" in ckpt and "model" not in ckpt:
+        state = {f"actor_encoder.{k}": v for k, v in ckpt["encoder"].items()}
+        state.update({f"actor_head.{k}": v for k, v in ckpt["head"].items()})
+        print(f"[play] BC warm-start checkpoint (mode={ckpt.get('mode')}, "
+              f"obs_frame={ckpt.get('obs_frame')}) — actor only")
+    else:
+        state = ckpt.get("model", ckpt)
     model = GraspPoseActorCritic(
         num_actor_obs=OBS_DIM,
         num_critic_obs=OBS_DIM,
-        num_actions=NUM_ACTIONS,
+        num_actions=num_actions,
         num_pc_points=args.num_pc_points,
         pc_embed_dim=args.pc_embed_dim,
     ).to(device)
@@ -451,6 +461,7 @@ def main():
     env_cfg.sim.device = device
     env_cfg.use_real_objects = args.use_real_objects
     env_cfg.variants_per_family = args.variants_per_family
+    env_cfg.eval_object_mode = args.eval_objects
     env_cfg.use_camera_pc = False
     env_cfg.visualize_grasp_point = args.visualize_grasp or args.video or not args.headless
     if args.cycle_shapes:
@@ -526,7 +537,7 @@ def main():
         if not os.path.isfile(ckpt):
             print(f"[play] checkpoint not found: {ckpt}")
             sys.exit(1)
-        policy = load_policy(ckpt, device)
+        policy = load_policy(ckpt, device, int(env_cfg.action_space))
         print(f"[play] loaded {ckpt}")
 
     n_act = int(env_cfg.action_space)
