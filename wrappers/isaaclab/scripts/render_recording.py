@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 
 import numpy as np
@@ -85,9 +86,18 @@ def project(r, pts_w: np.ndarray, width: int, height: int) -> np.ndarray:
     return np.stack([(ndc[:, 0] + 1) / 2 * width, (1 - ndc[:, 1]) / 2 * height], axis=-1)
 
 
-def draw_grasp(d: ImageDraw.ImageDraw, px: np.ndarray, colors, fnt):
+def draw_grasp(d: ImageDraw.ImageDraw, px: np.ndarray, colors, fnt, approach_px=None):
     """Always-on-top markers for the predicted grasp: a ring + dot per contact,
-    the jaw axis between two contacts, and the grasp midpoint."""
+    the jaw axis between two contacts, the grasp midpoint, and (6-DoF) an arrow
+    along the approach direction into the midpoint."""
+    if approach_px is not None:   # (start, end) pixels: pre-grasp → grasp midpoint
+        (x0, y0), (x1, y1) = approach_px
+        d.line([(x0, y0), (x1, y1)], fill=(255, 255, 255), width=7)
+        d.line([(x0, y0), (x1, y1)], fill=(40, 120, 255), width=4)
+        ang = math.atan2(y1 - y0, x1 - x0)
+        for side in (-1, 1):
+            d.line([(x1, y1), (x1 - 16 * math.cos(ang + side * 0.45), y1 - 16 * math.sin(ang + side * 0.45))],
+                   fill=(40, 120, 255), width=4)
     if len(px) == 2:
         d.line([tuple(px[0]), tuple(px[1])], fill=(255, 255, 255), width=5)
         d.line([tuple(px[0]), tuple(px[1])], fill=(230, 40, 160), width=2)
@@ -101,6 +111,16 @@ def draw_grasp(d: ImageDraw.ImageDraw, px: np.ndarray, colors, fnt):
         d.ellipse([x - 13, y - 13, x + 13, y + 13], outline=rgb, width=3)
         d.ellipse([x - 3, y - 3, x + 3, y + 3], fill=rgb)
         d.text((x + 16, y - 30), labels[k], font=fnt, fill=rgb, stroke_width=3, stroke_fill=(255, 255, 255))
+
+
+def render_frame(r, fallback):
+    """Render one frame. The offscreen renderer occasionally returns an all-black
+    image; retry, then reuse the previous good frame rather than flash black."""
+    for _ in range(3):
+        img = np.asarray(r.render_to_image())
+        if img.max() > 0:
+            return Image.fromarray(img)
+    return fallback.copy() if fallback is not None else Image.fromarray(img)
 
 
 def font(size):
@@ -172,6 +192,7 @@ def main():
     writer = imageio.get_writer(out, fps=args.fps, codec="libx264", pixelformat="yuv420p", quality=8)
 
     n_frames = 0
+    last_good = None
     for ep_idx in range(len(episodes)):
         ep = episodes[ep_idx]
         steps = np.nonzero(step_ep == ep_idx)[0]
@@ -206,19 +227,26 @@ def main():
             scene.set_geometry_transform("object", T)
             for k, c in enumerate(ep["contacts_local"]):
                 scene.set_geometry_transform(f"c{k}", T @ pose_mat(c, [1, 0, 0, 0]))
-            img = Image.fromarray(np.asarray(r.render_to_image()))
+            img = render_frame(r, last_good)
+            last_good = img
             d = ImageDraw.Draw(img)
             if args.show_grasp:
                 pts = np.array([(T @ np.r_[c, 1.0])[:3] for c in ep["contacts_local"]])
-                draw_grasp(d, project(r, pts, args.width, args.height), marker_colors, f_small)
+                arrow = None
+                if "approach_local" in ep:
+                    mid = pts.mean(axis=0)
+                    a_w = T[:3, :3] @ np.asarray(ep["approach_local"])
+                    arrow = project(r, np.stack([mid - 0.09 * a_w, mid]), args.width, args.height)
+                draw_grasp(d, project(r, pts, args.width, args.height), marker_colors, f_small, arrow)
             gain = max(0.0, float(obj_pose[si, 2]) - ep["spawn_z"])
             peak = max(peak, gain)
             lines = [f"Episode {ep_idx + 1}/{len(episodes)}   object: {ep['shape']}",
                      f"Phase: {phase_of(int(step_exec[si]))}",
                      f"Object lift: {100 * gain:4.1f} cm   peak {100 * peak:4.1f}   (target {100 * lift_target:.0f} cm)"]
             if args.show_grasp:
-                lines.append("Predicted grasp: c1 / c2 contacts, jaw axis + midpoint")
-            d.rectangle([12, 12, 840, 22 + 34 * len(lines)], fill=(255, 255, 255, 200))
+                lines.append("Predicted grasp: c1 / c2 contacts, jaw axis + midpoint"
+                             + (f", approach (blue) psi={ep['psi_deg']:+.0f} deg" if "psi_deg" in ep else ""))
+            d.rectangle([12, 12, 1150, 22 + 34 * len(lines)], fill=(255, 255, 255, 200))
             for li, text in enumerate(lines):
                 d.text((24, 20 + 34 * li), text, font=f_small, fill=(20, 20, 30))
             writer.append_data(np.asarray(img))

@@ -47,6 +47,15 @@ parser.add_argument("--pc_embed_dim",  type=int, default=128)
 parser.add_argument("--use_real_objects", type=lambda s: s.lower() != "false", default=True,
                     help="Include real (YCB-derived) objects alongside procedural shapes. "
                          "Pass --use_real_objects false to reproduce the original RNG-only run.")
+parser.add_argument("--executor", type=str, default="floating", choices=["floating", "franka_arm"],
+                    help="six_dof execution: floating Franka hand (learn the grasp, not arm "
+                         "reachability) or the full Franka arm with pose IK.")
+parser.add_argument("--grasp_mode", type=str, default="six_dof", choices=["six_dof", "top_down"],
+                    help="six_dof: contact pair + approach angle, any gripper orientation (7-D "
+                         "action, centroid-frame point cloud). top_down: vertical palm (6-D).")
+parser.add_argument("--obs_frame", type=str, default=None, choices=["centroid", "object"],
+                    help="Point-cloud / action frame. Default: centroid for six_dof (no object "
+                         "pose needed), object for top_down.")
 parser.add_argument("--variants_per_family", type=int, default=0,
                     help="Instances per object family to train on: 000 plus mutated variants "
                          "001.. from the mesh generators. 0 = all on disk, 1 = original only.")
@@ -98,7 +107,7 @@ bootstrap()
 from isaaclab_rl.rsl_rl import RslRlVecEnvWrapper
 
 from envs.grasp_pose_env_cfg import (
-    GraspPoseEnvCfg, OBS_DIM, NUM_ACTIONS, N_APPROACH, N_CLOSE, N_DESCEND,
+    GraspPoseEnvCfg, OBS_DIM, N_APPROACH, N_CLOSE, N_DESCEND,
 )
 from envs.grasp_pose_env import GraspPoseEnv
 from models.grasp_pose_actor_critic import GraspPoseActorCritic
@@ -431,6 +440,9 @@ def main():
     env_cfg.sim.device = device
     env_cfg.use_real_objects = args.use_real_objects
     env_cfg.variants_per_family = args.variants_per_family
+    env_cfg.grasp_mode = args.grasp_mode
+    env_cfg.six_dof_executor = args.executor
+    env_cfg.obs_frame = args.obs_frame
     if args.render_interval is not None:
         env_cfg.sim.render_interval = args.render_interval
     if args.two_point:
@@ -451,7 +463,7 @@ def main():
     print(f"[grasp-pose-train] simulation device={env_cfg.sim.device}")
     print(
         f"[grasp-pose-train] two_point_grasp={env_cfg.two_point_grasp}  "
-        f"NUM_ACTIONS={NUM_ACTIONS}  "
+        f"grasp_mode={env_cfg.grasp_mode}  "
         f"ik_write={env_cfg.ik_write_joint_state}/approach_only={env_cfg.ik_write_approach_only}  "
         f"contact_carry={env_cfg.contact_carry}  "
         f"require_contact_lift={env_cfg.require_contact_for_lift_reward}  "
@@ -462,6 +474,9 @@ def main():
 
     env = GraspPoseEnv(cfg=env_cfg, render_mode=None)
     env = RslRlVecEnvWrapper(env)
+    num_actions = int(env_cfg.action_space)   # resolved by the env from grasp_mode
+    print(f"[grasp-pose-train] grasp_mode={env_cfg.grasp_mode}  obs_frame={env_cfg.obs_frame}  "
+          f"num_actions={num_actions}")
 
     run_name = f"grasp_pose_envs{args.num_envs}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     log_dir = os.path.join(args.log_dir, run_name)
@@ -471,7 +486,7 @@ def main():
     ac = GraspPoseActorCritic(
         num_actor_obs=OBS_DIM,
         num_critic_obs=OBS_DIM,
-        num_actions=NUM_ACTIONS,
+        num_actions=num_actions,
         num_pc_points=args.num_pc_points,
         pc_embed_dim=args.pc_embed_dim,
         init_noise_std=0.5,
@@ -481,18 +496,24 @@ def main():
         mode = _load_checkpoint(ac, args.resume, device, encoder_only=False)
         print(f"[grasp-pose-train] resume: {mode} from {args.resume}")
         print(f"[grasp-pose-train] two_point_grasp={env_cfg.two_point_grasp}  "
-              f"NUM_ACTIONS={NUM_ACTIONS}  project_grasp_to_pc={env_cfg.project_grasp_to_pc}")
+              f"num_actions={num_actions}  project_grasp_to_pc={env_cfg.project_grasp_to_pc}")
     elif args.pretrain and os.path.exists(args.pretrain):
         ckpt = torch.load(args.pretrain, map_location=device, weights_only=False)
         ac.actor_encoder.load_state_dict(ckpt["encoder"])
         ac.critic_encoder.load_state_dict(ckpt["encoder"])
         loaded_head = False
-        # 2-point BC ckpt: also warm-start actor_head (critic head stays random).
-        if (
-            ckpt.get("mode") == "two_point"
-            and "head" in ckpt
-            and getattr(env_cfg, "two_point_grasp", False)
-        ):
+        # BC ckpt for this action space: also warm-start actor_head (critic head
+        # stays random). six_dof ckpts must also match the observation frame.
+        ckpt_mode = ckpt.get("mode")
+        head_matches = (
+            (ckpt_mode == "two_point" and env_cfg.grasp_mode == "top_down")
+            or (ckpt_mode == "six_dof" and env_cfg.grasp_mode == "six_dof"
+                and ckpt.get("obs_frame") == env_cfg.obs_frame)
+        )
+        if not head_matches and "head" in ckpt:
+            print(f"[grasp-pose-train] pretrain head is for mode={ckpt_mode} "
+                  f"obs_frame={ckpt.get('obs_frame')}; loading the encoder only")
+        if head_matches and "head" in ckpt:
             try:
                 ac.actor_head.load_state_dict(ckpt["head"])
                 loaded_head = True
@@ -500,7 +521,7 @@ def main():
                 print(f"[grasp-pose-train] WARNING: actor_head warm-start failed: {e}")
         if loaded_head:
             print(
-                f"[grasp-pose-train] warm start: encoder+actor_head (2pt BC) "
+                f"[grasp-pose-train] warm start: encoder+actor_head ({ckpt_mode} BC) "
                 f"from {args.pretrain}"
             )
         else:

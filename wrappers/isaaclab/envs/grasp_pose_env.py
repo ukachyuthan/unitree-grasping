@@ -30,6 +30,8 @@ from isaaclab.utils.math import (
     subtract_frame_transforms,
     combine_frame_transforms,
     skew_symmetric_matrix,
+    quat_from_angle_axis,
+    quat_mul,
 )
 from isaaclab.controllers.differential_ik import DifferentialIKController
 from isaaclab.controllers.differential_ik_cfg import DifferentialIKControllerCfg
@@ -44,9 +46,11 @@ from envs._object_registry import (
 from envs.grasp_pose_env_cfg import (
     GraspPoseEnvCfg,
     N_APPROACH, N_CLOSE, N_DESCEND, N_LIFT, N_HOLD, N_TRANSPORT, N_LOWER, N_OPEN, EXEC_STEPS,
-    NUM_PC_POINTS,
+    NUM_PC_POINTS, SIX_DOF_NUM_ACTIONS, SIX_DOF_EXEC_STEPS,
+    N_FLOAT_SETTLE, FLOATING_EXEC_STEPS, FLOATING_HAND_CFG, FLOATING_HAND_JOINTS,
 )
 from grasping.pointcloud_utils import add_sensor_noise
+from envs.six_dof_geometry import approach_from_jaw, euler_zyx_from_matrix
 
 
 def _smoothstep(t: float) -> float:
@@ -62,6 +66,7 @@ class GraspPoseEnv(DirectRLEnv):
     cfg: GraspPoseEnvCfg
 
     def __init__(self, cfg: GraspPoseEnvCfg, render_mode=None):
+        self._apply_grasp_mode(cfg)
         super().__init__(cfg, render_mode=render_mode)
 
         # Batched object-collection bookkeeping (see _setup_scene).
@@ -242,6 +247,17 @@ class GraspPoseEnv(DirectRLEnv):
         self._arm_q_des = self._home_joint_pos[:, self._arm_dof_idx].clone()
         self._arm_q_hold = self._arm_q_des.clone()
         self._lift_start_w = torch.zeros(B, 3, device=self.device)
+        # 6-DoF grasp plan (world frame, fixed at decision time) + observation frame.
+        self._six_mid_w = torch.zeros(B, 3, device=self.device)
+        self._six_approach_w = torch.zeros(B, 3, device=self.device)
+        self._six_approach_w[:, 2] = -1.0
+        self._six_quat_w = torch.zeros(B, 4, device=self.device)
+        self._six_quat_w[:, 0] = 1.0
+        self._six_lift_quat_w = self._six_quat_w.clone()
+        self._six_psi = torch.zeros(B, device=self.device)
+        self._obs_centroid_w = torch.zeros(B, 3, device=self.device)
+        self._float_q_pre = self._home_joint_pos[:, self._arm_dof_idx].clone()
+        self._float_q_final = self._float_q_pre.clone()
         # Filled at end of approach for IK diagnostics (play / debug).
         self._ik_finger_err = torch.zeros(B, device=self.device)
         self._ik_palm_err = torch.zeros(B, device=self.device)
@@ -442,19 +458,24 @@ class GraspPoseEnv(DirectRLEnv):
             [self._park_offset(i) for i in range(self._num_shapes)]
         )  # (N, 3) env-local
 
-        self._finger_contact = ContactSensor(
-            ContactSensorCfg(
-                prim_path=self.cfg.finger_contact_prim_path,
-                history_length=0,
-                track_air_time=False,
-                # Only the spawned shapes: unspawned variants would match no prims.
-                filter_prim_paths_expr=[
-                    p for p in self.cfg.finger_contact_filter_paths
-                    if p.rsplit("/", 1)[-1] in {prim_name(n) for n in self._shape_names}
-                ],
+        # One sensor per finger: PhysX pairs each filter pattern with every sensor
+        # body, so a single sensor over both fingers (2 bodies/env) rejected all the
+        # per-object filters (1 body/env) and only unfiltered net force — table
+        # contact included — was available.
+        active = {prim_name(n) for n in self._shape_names}
+        filters = [p for p in self.cfg.finger_contact_filter_paths if p.rsplit("/", 1)[-1] in active]
+        self._finger_contacts = []
+        for side in ("left", "right"):
+            sensor = ContactSensor(
+                ContactSensorCfg(
+                    prim_path=f"{self.cfg.finger_contact_robot_path}/panda_{side}finger",
+                    history_length=0,
+                    track_air_time=False,
+                    filter_prim_paths_expr=filters,
+                )
             )
-        )
-        self.scene.sensors["finger_contact"] = self._finger_contact
+            self.scene.sensors[f"finger_contact_{side}"] = sensor
+            self._finger_contacts.append(sensor)
 
         # Optional: rendered depth camera for viewpoint-diverse PC observations.
         # Camera is placed at a random pose around each object per episode.
@@ -784,6 +805,8 @@ class GraspPoseEnv(DirectRLEnv):
             else:
                 self._set_two_point_contacts_local(c1, c2)
             self._last_surface_contact_reward.zero_()
+        elif self.cfg.grasp_mode == "six_dof":
+            self._decode_six_dof(a, _denorm_xyz)
         elif self.cfg.two_point_grasp:
             c1 = _undo_pc_yaw(_denorm_xyz(a[:, 0], a[:, 1], a[:, 2]))
             c2 = _undo_pc_yaw(_denorm_xyz(a[:, 3], a[:, 4], a[:, 5]))
@@ -791,7 +814,8 @@ class GraspPoseEnv(DirectRLEnv):
                 c1s, c2s, mid, width, jaw = self._project_two_contacts_to_pc(c1, c2)
             else:
                 c1s, c2s, mid, width, jaw = self._enforce_min_contact_separation(c1, c2)
-            self._last_surface_contact_reward = self._surface_contact_reward(c1s, c2s)
+            # Raw contacts: after projection they are on the surface by construction.
+            self._last_surface_contact_reward = self._surface_contact_reward(c1, c2)
             width = width.clamp(min=max(w_lo, self.cfg.two_point_min_pinch_width_m), max=w_hi)
             self._contact_left_local = c1s
             self._contact_right_local = c2s
@@ -826,7 +850,9 @@ class GraspPoseEnv(DirectRLEnv):
         self._grasp_origin_w = self._obj_anchor[:, :3].clone()
         self._grasp_origin_quat = self._obj_anchor[:, 3:7].clone()
 
-        if self.cfg.two_point_grasp:
+        if self.cfg.grasp_mode == "six_dof":
+            self._plan_six_dof_grasp()
+        elif self.cfg.two_point_grasp:
             # Lock jaw *axis sign* once (no live L/R swap). j7 is solved each
             # step from current hand pose so world yaw tracks as the arm moves.
             self._lock_two_point_jaw_sign()
@@ -914,11 +940,11 @@ class GraspPoseEnv(DirectRLEnv):
         b = torch.arange(self.num_envs, device=self.device)
         return pc[b, idx]
 
-    def _project_local_to_surface(self, local: torch.Tensor) -> torch.Tensor:
+    def _project_local_to_surface(self, local: torch.Tensor, allow_ray_down: bool = True) -> torch.Tensor:
         """Snap onto mesh surface (top-down ray when enabled, else closest point)."""
         if self._mesh_proximity is None:
             return self._project_local_to_pc(local)
-        if self.cfg.project_grasp_ray_down and self.cfg.approach_mode == "top":
+        if allow_ray_down and self.cfg.project_grasp_ray_down and self.cfg.approach_mode == "top":
             return self._project_local_ray_down(local)
         out = local.clone()
         pts_np = local.detach().cpu().numpy()
@@ -1181,6 +1207,9 @@ class GraspPoseEnv(DirectRLEnv):
     # ── Scripted execution (called each physics step within decimation) ────────
 
     def _apply_action(self):
+        if self.cfg.grasp_mode == "six_dof":
+            self._apply_action_six_dof()
+            return
         s = self._exec_step
         self._hold_idle_joints()
 
@@ -1280,6 +1309,350 @@ class GraspPoseEnv(DirectRLEnv):
         elif (self.cfg.kinematic_grasp or self.cfg.contact_carry) and T_close <= s < T_lower:
             self._sync_grasped_object()
 
+        if self._grasp_marker is not None:
+            self._update_grasp_markers()
+
+    # ── 6-DoF grasping (cfg.grasp_mode == "six_dof") ──────────────────────────
+    #
+    # Action (tanh space, 7): c1 (3) + c2 (3) contact points in the observation
+    # frame, ψ (1) = approach angle about the jaw axis c1→c2. ψ = 0 is the most
+    # top-down approach that keeps the jaw on c1→c2; |ψ| = six_dof_max_tilt_rad
+    # (90°) is horizontal. Because ψ rotates away from straight down within the
+    # plane ⟂ to the jaw, the approach can never point up (from below the table).
+    # Execution: pre-grasp (standoff back along the approach) → straight insert →
+    # close → lift straight up → hold, with full 7-joint pose IK at the pad centres.
+
+    @staticmethod
+    def _apply_grasp_mode(cfg: GraspPoseEnvCfg):
+        """Resolve grasp_mode / obs_frame into the cfg fields they imply. Runs before
+        DirectRLEnv builds the scene and the action space."""
+        if cfg.grasp_mode not in ("top_down", "six_dof"):
+            raise ValueError(f"grasp_mode must be 'top_down' or 'six_dof', got {cfg.grasp_mode!r}")
+        if cfg.obs_frame is None:
+            cfg.obs_frame = "centroid" if cfg.grasp_mode == "six_dof" else "object"
+        if cfg.obs_frame not in ("object", "centroid"):
+            raise ValueError(f"obs_frame must be 'object' or 'centroid', got {cfg.obs_frame!r}")
+        if cfg.obs_frame == "centroid" and cfg.grasp_mode != "six_dof":
+            raise ValueError("obs_frame='centroid' is implemented for grasp_mode='six_dof' only")
+        if cfg.obs_frame == "centroid":
+            cfg.pc_augment_yaw = False   # the object's real yaw is already in the cloud
+        if cfg.grasp_mode == "six_dof":
+            cfg.two_point_grasp = True   # shared contact-pair bookkeeping / rewards
+            cfg.action_space = SIX_DOF_NUM_ACTIONS
+            cfg.decimation = SIX_DOF_EXEC_STEPS
+            cfg.episode_length_s = (SIX_DOF_EXEC_STEPS / 60.0) * 1.5
+            cfg.sim.render_interval = min(cfg.sim.render_interval, cfg.decimation)
+            cfg.task_mode_prob_place = 0.0   # lift-only: transport/place IK is top-down
+            if cfg.six_dof_executor == "floating":
+                # Hand only, on six virtual joints: what is learned is the grasp,
+                # not this arm's reachability. Teleported to the pre-grasp, so the
+                # 120-step arm approach is replaced by a short settle.
+                cfg.robot = FLOATING_HAND_CFG.replace()
+                cfg.arm_joint_names = list(FLOATING_HAND_JOINTS)
+                cfg.decimation = FLOATING_EXEC_STEPS
+                cfg.episode_length_s = (FLOATING_EXEC_STEPS / 60.0) * 1.5
+                cfg.sim.render_interval = min(cfg.sim.render_interval, cfg.decimation)
+            elif cfg.six_dof_executor == "franka_arm":
+                # Gravity-compensated arm, as on a real Franka (and Isaac Lab's
+                # FRANKA_PANDA_HIGH_PD_CFG for IK tasks). With gravity on, the PD settles
+                # 2–3 cm low at the TCP — enough to put the fingers on the table.
+                cfg.robot.spawn.rigid_props.disable_gravity = True
+            else:
+                raise ValueError(f"six_dof_executor must be 'floating' or 'franka_arm', "
+                                 f"got {cfg.six_dof_executor!r}")
+
+    def _obs_to_object_local(self, p: torch.Tensor) -> torch.Tensor:
+        """Point in the observation frame → object-local frame at the settled pose."""
+        if self.cfg.obs_frame != "centroid":
+            return p
+        w = p + self._obs_centroid_w
+        return quat_rotate(quat_inv(self._obj_anchor[:, 3:7]), w - self._obj_anchor[:, :3])
+
+    def _object_local_to_obs(self, p: torch.Tensor) -> torch.Tensor:
+        if self.cfg.obs_frame != "centroid":
+            return p
+        w = self._obj_anchor[:, :3] + quat_rotate(self._obj_anchor[:, 3:7], p)
+        return w - self._obs_centroid_w
+
+    def encode_six_dof_action(
+        self, c1_local: torch.Tensor, c2_local: torch.Tensor, psi_rad: float | torch.Tensor
+    ) -> torch.Tensor:
+        """Inverse of _decode_six_dof: object-local contacts + ψ → tanh-space action.
+        For scripted / debug grasps (play_grasp_pose.py --debug_action)."""
+        x_lo, x_hi = self.cfg.grasp_x_bounds
+        y_lo, y_hi = self.cfg.grasp_y_bounds
+        z_lo, z_hi = self.cfg.grasp_z_bounds
+        lo = torch.tensor([x_lo, y_lo, z_lo], device=self.device)
+        hi = torch.tensor([x_hi, y_hi, z_hi], device=self.device)
+
+        def norm(p):
+            return (2.0 * (self._object_local_to_obs(p) - lo) / (hi - lo) - 1.0).clamp(-1.0, 1.0)
+
+        psi = torch.as_tensor(psi_rad, device=self.device, dtype=torch.float32).expand(self.num_envs)
+        psi_n = (psi / self.cfg.six_dof_max_tilt_rad).clamp(-1.0, 1.0).unsqueeze(-1)
+        return torch.cat([norm(c1_local), norm(c2_local), psi_n], dim=-1)
+
+    def _spread_contacts_3d(self, c1: torch.Tensor, c2: torch.Tensor):
+        """Enforce the minimum pinch width along the true (3-D) c1→c2 axis."""
+        delta = c2 - c1
+        d = delta.norm(dim=-1, keepdim=True)
+        fallback = torch.tensor([0.0, 1.0, 0.0], device=self.device).expand_as(delta)
+        u = torch.where(d > 1e-4, delta / d.clamp(min=1e-6), fallback)
+        half = d.clamp(min=self.cfg.two_point_min_pinch_width_m) / 2
+        mid = 0.5 * (c1 + c2)
+        return mid - u * half, mid + u * half
+
+    def _decode_six_dof(self, a: torch.Tensor, denorm):
+        c1 = self._obs_to_object_local(denorm(a[:, 0], a[:, 1], a[:, 2]))
+        c2 = self._obs_to_object_local(denorm(a[:, 3], a[:, 4], a[:, 5]))
+        # Shaping on the policy's own (raw) contacts: after surface projection the
+        # distance is always ~0, which made this a constant bonus with no signal.
+        self._last_surface_contact_reward = self._surface_contact_reward(c1, c2)
+        project = self.cfg.project_grasp_to_pc
+        if project:   # closest surface point — the top-down ray cast would put side contacts on top
+            c1 = self._project_local_to_surface(c1, allow_ray_down=False)
+            c2 = self._project_local_to_surface(c2, allow_ray_down=False)
+        c1, c2 = self._spread_contacts_3d(c1, c2)
+        if project:
+            c1 = self._project_local_to_surface(c1, allow_ray_down=False)
+            c2 = self._project_local_to_surface(c2, allow_ray_down=False)
+        delta = c2 - c1
+        d = delta.norm(dim=-1)
+        fallback = torch.tensor([0.0, 1.0, 0.0], device=self.device).expand_as(delta)
+        w_lo, w_hi = self.cfg.grasp_width_bounds
+        self._jaw_axis_local = torch.where(
+            (d > 1e-4).unsqueeze(-1), delta / d.clamp(min=1e-6).unsqueeze(-1), fallback
+        )
+        self._grasp_width = d.clamp(min=max(w_lo, self.cfg.two_point_min_pinch_width_m), max=w_hi)
+        self._grasp_target = 0.5 * (c1 + c2)
+        self._contact_left_local = c1     # re-assigned to fingers in _plan_six_dof_grasp
+        self._contact_right_local = c2
+        self._tilt_target.zero_()
+        self._six_psi = a[:, 6] * self.cfg.six_dof_max_tilt_rad
+
+    def _plan_six_dof_grasp(self):
+        """Fix the grasp pose in the world: pad midpoint, approach direction, hand
+        orientation, and which finger takes which contact. Needs _grasp_origin_*."""
+        u = quat_rotate(self._grasp_origin_quat, self._jaw_axis_local)   # jaw axis, world
+        mid_w = self._grasp_point_world()
+        # Vertical jaw: every approach ⟂ to it is horizontal — default to radial from the robot.
+        radial = mid_w - self._robot.data.root_pos_w
+        radial[:, 2] = 0.0
+        radial = radial / radial.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+        approach = approach_from_jaw(u, self._six_psi, radial)
+
+        # Franka hand frame: +Z = approach (toward the fingertips), +Y = toward the
+        # left finger. The jaw is symmetric, so take whichever of ±jaw is closer to
+        # the current hand orientation (less wrist travel), and give that side's
+        # contact to the left finger.
+        def hand_quat(y):
+            return quat_from_matrix(
+                torch.stack([torch.cross(y, approach, dim=-1), y, approach], dim=-1)
+            )
+
+        q_pos, q_neg = hand_quat(u), hand_quat(-u)
+        q_cur = self._robot.data.body_quat_w[:, self._ee_body_idx]
+        use_pos = (q_pos * q_cur).sum(-1).abs() >= (q_neg * q_cur).sum(-1).abs()
+        self._six_quat_w = torch.where(use_pos.unsqueeze(-1), q_pos, q_neg)
+        y_local = self._jaw_axis_local * torch.where(use_pos, 1.0, -1.0).unsqueeze(-1)
+        half = (self._grasp_width / 2).unsqueeze(-1)
+        self._contact_left_local = self._grasp_target + y_local * half
+        self._contact_right_local = self._grasp_target - y_local * half
+        self._six_mid_w = mid_w
+        self._six_approach_w = approach
+        if self.cfg.six_dof_executor == "floating":
+            self._plan_floating_hand()
+
+    # Hand frame → pad centre (finger joints at +0.0584, pads 0.045 further).
+    _FLOAT_TCP_OFFSET_M = 0.0584
+
+    def _plan_floating_hand(self):
+        """Virtual-joint targets for the floating hand: pre-grasp (standoff back
+        along the approach) and final pose, with execution noise applied to what
+        is executed (the intended contacts are unchanged)."""
+        B = self.num_envs
+        q = self._six_quat_w
+        tcp = self._six_mid_w
+        rot_std = self.cfg.six_dof_exec_noise_rot_rad
+        if rot_std > 0.0:
+            v = torch.randn(B, 3, device=self.device) * rot_std
+            ang = v.norm(dim=-1)
+            q = quat_mul(quat_from_angle_axis(ang, v / ang.clamp(min=1e-9).unsqueeze(-1)), q)
+        pos_std = self.cfg.six_dof_exec_noise_pos_m
+        if pos_std > 0.0:
+            tcp = tcp + torch.randn(B, 3, device=self.device) * pos_std
+        R = matrix_from_quat(q)
+        z = R[:, :, 2]                                    # executed approach (hand +Z)
+        hand_final = tcp - z * (self._FLOAT_TCP_OFFSET_M + self.cfg.finger_pad_offset_m)
+        hand_pre = hand_final - z * self.cfg.six_dof_standoff_m
+        root = self._robot.data.root_pos_w
+        rot = euler_zyx_from_matrix(R)   # virtual joint order fg_rz, fg_ry, fg_rx
+        self._float_q_pre = torch.cat([hand_pre - root, rot], dim=-1)
+        self._float_q_final = torch.cat([hand_final - root, rot], dim=-1)
+
+    def _six_ik_step(self, target_pos_w: torch.Tensor, target_quat_w: torch.Tensor):
+        """One damped-least-squares step of full pose IK on all 7 arm joints: the
+        finger-pad midpoint to target_pos_w, the hand to target_quat_w."""
+        R_inv = matrix_from_quat(quat_inv(self._robot.data.root_quat_w))
+        J_all = self._robot.root_physx_view.get_jacobians()
+        J_lin = self._jacobian_finger_mid_pos_base()                                 # (B, 3, 7)
+        J_ang = torch.bmm(R_inv, J_all[:, self._ee_jac_idx, 3:, :][:, :, self._arm_dof_idx])
+        pos_err, rot_err = compute_pose_error(
+            self._finger_midpoint_w(), self._robot.data.body_quat_w[:, self._ee_body_idx],
+            target_pos_w, target_quat_w, rot_error_type="axis_angle",
+        )
+
+        def clamp_norm(v, m):
+            n = v.norm(dim=-1, keepdim=True)
+            return v * (m / n.clamp(min=1e-9)).clamp(max=1.0)
+
+        pos_err = clamp_norm(pos_err, self.cfg.six_dof_max_pos_err_m)
+        rot_err = clamp_norm(rot_err, self.cfg.six_dof_max_rot_err_rad)
+        w = self.cfg.six_dof_rot_weight
+        J = torch.cat([J_lin, w * J_ang], dim=1)                                      # (B, 6, 7)
+        err = torch.cat([
+            torch.bmm(R_inv, pos_err.unsqueeze(-1)).squeeze(-1),
+            w * torch.bmm(R_inv, rot_err.unsqueeze(-1)).squeeze(-1),
+        ], dim=-1)
+        Jt = J.transpose(1, 2)
+        A = J @ Jt + (self.cfg.six_dof_ik_lambda ** 2) * torch.eye(6, device=self.device)
+        dq = (Jt @ torch.linalg.solve(A, err.unsqueeze(-1))).squeeze(-1)
+        max_step = self.cfg.diff_ik_max_joint_step
+        if max_step > 0.0:
+            dq = dq.clamp(-max_step, max_step)
+        lo = self._robot.data.soft_joint_pos_limits[:, self._arm_dof_idx, 0]
+        hi = self._robot.data.soft_joint_pos_limits[:, self._arm_dof_idx, 1]
+        q = (self._robot.data.joint_pos[:, self._arm_dof_idx] + dq).clamp(lo, hi)
+        self._arm_q_des = q
+        self._robot.set_joint_position_target(q, joint_ids=self._arm_dof_idx)
+
+    def _apply_action_floating(self):
+        """Floating hand: teleport to the pre-grasp, settle, straight-line insert,
+        close, lift straight up, hold. No IK — the virtual joints are the pose."""
+        s = self._exec_step
+        T_set = N_FLOAT_SETTLE
+        T_ins = T_set + N_DESCEND
+        T_close = T_ins + N_CLOSE
+        T_lift = T_close + N_LIFT
+        q_open = self._gripper_open.unsqueeze(0).expand(self.num_envs, -1)
+        arm = self._arm_dof_idx
+
+        if s == 0:
+            q_all = self._robot.data.joint_pos.clone()
+            q_all[:, arm] = self._float_q_pre
+            q_all[:, self._grip_dof_idx] = q_open
+            self._robot.write_joint_state_to_sim(q_all, torch.zeros_like(q_all))
+        if s < T_set:
+            self._arm_q_des = self._float_q_pre
+            self._robot.set_joint_position_target(self._float_q_pre, joint_ids=arm)
+            self._force_gripper_open(q_open)
+        elif s < T_ins:
+            t = _smoothstep((s - T_set + 1) / max(N_DESCEND, 1))
+            q = self._float_q_pre + (self._float_q_final - self._float_q_pre) * t
+            self._arm_q_des = q
+            self._robot.set_joint_position_target(q, joint_ids=arm)
+            self._force_gripper_open(q_open)
+            if s + 1 >= T_ins:
+                self._record_ik_reach()
+                left, right = self._finger_pads_w()
+                finger_axis = left - right
+                finger_axis = finger_axis / finger_axis.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+                jaw_w = quat_rotate(self._grasp_origin_quat, self._jaw_axis_local)
+                self._ik_jaw_align = (finger_axis * jaw_w).sum(dim=-1).abs()
+                self._ik_reach_logged = True
+                self._arm_q_hold = self._float_q_final.clone()
+        elif s < T_close:
+            k = s - T_ins + 1
+            self._do_gripper(_smoothstep(k / max(N_CLOSE, 1)), lock_at_end=(k >= N_CLOSE))
+            if k >= N_CLOSE:
+                self._record_contact_reach(after_close=True)
+        elif s < T_lift:
+            k = s - T_close
+            t = _smoothstep((k + 1) / max(N_LIFT, 1))
+            q = self._float_q_final.clone()
+            q[:, 2] += self.cfg.lift_height_m * t          # fg_z: straight up
+            self._arm_q_des = q
+            self._robot.set_joint_position_target(q, joint_ids=arm)
+            self._robot.set_joint_position_target(self._gripper_close_target, joint_ids=self._grip_dof_idx)
+            if k + 1 >= N_LIFT:
+                self._arm_q_hold = q.clone()
+        else:
+            self._hold_pose()
+
+        if s >= T_close:
+            obj_z = self._get_active_obj_pos()[:, 2]
+            self._last_hold_obj_z = torch.max(self._last_hold_obj_z, obj_z)
+            self._lift_had_contact |= self._fingers_in_contact()
+
+        self._exec_step += 1
+        if s < T_close:
+            self._pin_objects()
+        if self._grasp_marker is not None:
+            self._update_grasp_markers()
+
+    def _apply_action_six_dof(self):
+        if self.cfg.six_dof_executor == "floating":
+            self._apply_action_floating()
+            return
+        s = self._exec_step
+        self._hold_idle_joints()
+        T_app = N_APPROACH
+        T_ins = T_app + N_DESCEND
+        T_close = T_ins + N_CLOSE
+        T_lift = T_close + N_LIFT
+        q_open = self._gripper_open.unsqueeze(0).expand(self.num_envs, -1)
+        up = torch.tensor([0.0, 0.0, 1.0], device=self.device)
+
+        if s < T_app:
+            # Pre-grasp: standoff back along the approach; first half also raised,
+            # so the hand comes over the object rather than through it.
+            tgt = self._six_mid_w - self._six_approach_w * self.cfg.six_dof_standoff_m
+            if s < T_app // 2:
+                tgt = tgt + up * self.cfg.six_dof_hover_m
+            self._six_ik_step(tgt, self._six_quat_w)
+            self._force_gripper_open(q_open)
+        elif s < T_ins:
+            # Insert: straight line along the approach onto the contacts.
+            t = _smoothstep((s - T_app + 1) / max(N_DESCEND, 1))
+            tgt = self._six_mid_w - self._six_approach_w * (self.cfg.six_dof_standoff_m * (1.0 - t))
+            self._six_ik_step(tgt, self._six_quat_w)
+            self._force_gripper_open(q_open)
+            if s + 1 >= T_ins:
+                self._record_ik_reach()
+                left, right = self._finger_pads_w()
+                finger_axis = left - right
+                finger_axis = finger_axis / finger_axis.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+                jaw_w = quat_rotate(self._grasp_origin_quat, self._jaw_axis_local)
+                self._ik_jaw_align = (finger_axis * jaw_w).sum(dim=-1).abs()   # 3-D, not table-plane
+                self._ik_reach_logged = True
+                # Hold the commanded pose (not the measured one, which would sag).
+                self._arm_q_hold = self._arm_q_des.clone()
+        elif s < T_close:
+            k = s - T_ins + 1
+            self._do_gripper(_smoothstep(k / max(N_CLOSE, 1)), lock_at_end=(k >= N_CLOSE))
+            if k >= N_CLOSE:
+                self._record_contact_reach(after_close=True)
+        elif s < T_lift:
+            k = s - T_close
+            if k == 0:
+                self._lift_start_w = self._finger_midpoint_w().clone()
+                self._six_lift_quat_w = self._robot.data.body_quat_w[:, self._ee_body_idx].clone()
+            t = _smoothstep((k + 1) / max(N_LIFT, 1))
+            self._six_ik_step(self._lift_start_w + up * (self.cfg.lift_height_m * t), self._six_lift_quat_w)
+            self._robot.set_joint_position_target(self._gripper_close_target, joint_ids=self._grip_dof_idx)
+            if k + 1 >= N_LIFT:
+                self._arm_q_hold = self._arm_q_des.clone()
+        else:
+            self._hold_pose()
+
+        if s >= T_close:
+            obj_z = self._get_active_obj_pos()[:, 2]
+            self._last_hold_obj_z = torch.max(self._last_hold_obj_z, obj_z)
+            self._lift_had_contact |= self._fingers_in_contact()
+
+        self._exec_step += 1
+        if s < T_close:
+            self._pin_objects()
         if self._grasp_marker is not None:
             self._update_grasp_markers()
 
@@ -2177,11 +2550,18 @@ class GraspPoseEnv(DirectRLEnv):
                     (obj_w - grasp_pt).norm(dim=-1) <= self.cfg.grasp_reach_thresh
                 )
 
+    def finger_object_forces(self) -> torch.Tensor:
+        """(B, 2) contact force magnitude (N) of each finger against the grasp
+        objects only — the table and the other finger are filtered out."""
+        mags = []
+        for sensor in self._finger_contacts:
+            fm = sensor.data.force_matrix_w            # (B, 1, n_filters, 3)
+            mags.append(fm.norm(dim=-1).sum(dim=(-1, -2)))
+        return torch.stack(mags, dim=-1)
+
     def _fingers_in_contact(self) -> torch.Tensor:
-        """True per-env when enough fingertips register real contact force."""
-        forces = self._finger_contact.data.net_forces_w  # (B, n_fingers, 3)
-        fmag = forces.norm(dim=-1)                        # (B, n_fingers)
-        n_touch = (fmag > self.cfg.contact_force_thresh).sum(dim=-1)
+        """True per-env when enough fingers push on the object (not the table)."""
+        n_touch = (self.finger_object_forces() > self.cfg.contact_force_thresh).sum(dim=-1)
         return n_touch >= self.cfg.min_contact_fingers
 
     def _do_lift(self):
@@ -2444,12 +2824,26 @@ class GraspPoseEnv(DirectRLEnv):
         else:
             pc_local = pc_fast
 
+        if self.cfg.obs_frame == "centroid":
+            # Points in the world, as a depth camera would give them (noise is added
+            # here), then centred on the observed cloud's centroid — no object pose.
+            n_pts = pc_local.shape[1]
+            q = self._obj_anchor[:, 3:7].unsqueeze(1).expand(-1, n_pts, -1).reshape(-1, 4)
+            pc_local = (
+                quat_rotate(q, pc_local.reshape(-1, 3)).view(B, n_pts, 3)
+                + self._obj_anchor[:, :3].unsqueeze(1)
+            )
+
         g_std  = torch.empty(B, device=self.device).uniform_(*self.cfg.pc_noise_range_m)
         drop_p = torch.empty(B, device=self.device).uniform_(*self.cfg.pc_dropout_frac_range)
         out_p  = torch.empty(B, device=self.device).uniform_(*self.cfg.pc_outlier_frac_range)
         pc_local = add_sensor_noise(pc_local, gaussian_std=g_std, dropout_frac=drop_p, outlier_frac=out_p)
 
-        return pc_local.view(B, -1)   # (B, N*3) in object-local frame
+        if self.cfg.obs_frame == "centroid":
+            self._obs_centroid_w = pc_local.mean(dim=1)
+            pc_local = pc_local - self._obs_centroid_w.unsqueeze(1)
+
+        return pc_local.view(B, -1)   # (B, N*3) in the cfg.obs_frame frame
 
     def _get_active_obj_pos(self) -> torch.Tensor:
         """Return world-frame position of the active object in each env."""

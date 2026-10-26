@@ -20,8 +20,11 @@ File format (.npz):
 from __future__ import annotations
 
 import json
+import math
 
 import numpy as np
+
+from isaaclab.utils.math import quat_inv, quat_rotate
 
 from envs._object_registry import shape_asset
 
@@ -88,6 +91,11 @@ class StateRecorder:
             ep["contacts_local"] = [u._contact_left_local[0].tolist(), u._contact_right_local[0].tolist()]
         else:
             ep["contacts_local"] = [u._grasp_target[0].tolist()]
+        if u.cfg.grasp_mode == "six_dof":
+            # Approach direction (toward the fingertips), object-local so it moves with the object.
+            a_local = quat_rotate(quat_inv(u._grasp_origin_quat[:1]), u._six_approach_w[:1])[0]
+            ep["approach_local"] = a_local.tolist()
+            ep["psi_deg"] = float(math.degrees(float(u._six_psi[0])))
         self.episodes.append(ep)
 
     def capture(self):
@@ -120,7 +128,7 @@ class StateRecorder:
             "table": {"center": [float(v) for v in table.init_state.pos],
                       "size": [float(v) for v in table.spawn.size]},
             # Phase lengths in physics steps, in execution order (see grasp_pose_env_cfg).
-            "phases": _phase_table(),
+            "phases": _phase_table(cfg),
         }
         arrays = {
             "meta": np.array(json.dumps(meta)),
@@ -142,8 +150,15 @@ class StateRecorder:
         print(f"[record] saved {len(self._pos)} frames, {len(self.episodes)} episodes → {path}")
 
 
-def _phase_table() -> list[list]:
+def _phase_table(cfg) -> list[list]:
+    """Phase names and lengths (physics steps) for the executor that ran."""
     from envs import grasp_pose_env_cfg as c
+    if cfg.grasp_mode == "six_dof" and cfg.six_dof_executor == "floating":
+        return [["settle", c.N_FLOAT_SETTLE], ["insert", c.N_DESCEND], ["close", c.N_CLOSE],
+                ["lift", c.N_LIFT], ["hold", c.N_HOLD]]
+    if cfg.grasp_mode == "six_dof":
+        return [["approach", c.N_APPROACH], ["insert", c.N_DESCEND], ["close", c.N_CLOSE],
+                ["lift", c.N_LIFT], ["hold", c.N_HOLD]]
     return [["approach", c.N_APPROACH], ["descend", c.N_DESCEND], ["close", c.N_CLOSE],
             ["lift", c.N_LIFT], ["hold", c.N_HOLD], ["transport", c.N_TRANSPORT],
             ["lower", c.N_LOWER], ["open", c.N_OPEN]]

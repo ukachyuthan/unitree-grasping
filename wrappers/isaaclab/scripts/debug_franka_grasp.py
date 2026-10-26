@@ -34,8 +34,7 @@ def main():
         if s in (N_APPROACH - 1, close_end, env.cfg.decimation - 1):
             ee = env._robot.data.body_pos_w[0, env._ee_body_idx, :3]
             obj = env._get_active_obj_pos()[0]
-            forces = env._finger_contact.data.net_forces_w[0]
-            fmag = forces.norm(dim=-1)
+            fmag = env.finger_object_forces()[0]
             print(f"step {s:3d}  ee_z={ee[2]:.3f}  obj_z={obj[2]:.3f}  "
                   f"fingers={fmag.cpu().numpy().round(2)}  locked={env._grasp_locked[0].item()}")
     rew = env._get_rewards()

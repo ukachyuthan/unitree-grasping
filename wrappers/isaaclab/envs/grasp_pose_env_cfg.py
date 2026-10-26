@@ -13,6 +13,7 @@ from __future__ import annotations
 import colorsys
 import hashlib
 import math
+from pathlib import Path
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, RigidObjectCfg
@@ -50,6 +51,68 @@ N_LOWER     : int = 30   # descend to place height
 N_OPEN      : int = 15   # open gripper and release
 EXEC_STEPS  : int = (
     N_APPROACH + N_DESCEND + N_CLOSE + N_LIFT + N_HOLD + N_TRANSPORT + N_LOWER + N_OPEN
+)
+
+# 6-DoF mode (grasp_mode="six_dof"): action = c1 (3) + c2 (3) + ψ (1), where ψ
+# turns the approach about the jaw axis c1→c2 from the most top-down approach
+# (ψ=0) to horizontal (|ψ| = six_dof_max_tilt_rad). Phases: pre-grasp approach →
+# straight insert → close → lift → hold (lift-only; no transport/place).
+SIX_DOF_NUM_ACTIONS: int = 7
+SIX_DOF_EXEC_STEPS: int = N_APPROACH + N_DESCEND + N_CLOSE + N_LIFT + N_HOLD
+# Floating hand: teleported to the pre-grasp, so the approach is just a settle.
+N_FLOAT_SETTLE: int = 10
+FLOATING_EXEC_STEPS: int = N_FLOAT_SETTLE + N_DESCEND + N_CLOSE + N_LIFT + N_HOLD
+
+# ── Floating Franka hand (six_dof_executor="floating") ───────────────────────
+# Learns WHERE to grasp without arm kinematics: the Panda hand on six virtual
+# joints (x, y, z, then R = Rz·Ry·Rx), gravity-compensated, real contact physics.
+# On a real robot an arm motion planner executes the chosen (reachable) grasp.
+FLOATING_HAND_URDF = str(
+    Path(__file__).resolve().parents[1] / "assets" / "floating_panda_hand" / "floating_panda_hand.urdf"
+)
+FLOATING_HAND_JOINTS: list = ["fg_x", "fg_y", "fg_z", "fg_rz", "fg_ry", "fg_rx"]
+FLOATING_HAND_CFG = ArticulationCfg(
+    prim_path="/World/envs/env_.*/Robot",
+    spawn=sim_utils.UrdfFileCfg(
+        asset_path=FLOATING_HAND_URDF,
+        fix_base=True,
+        merge_fixed_joints=False,
+        self_collision=False,
+        activate_contact_sensors=True,
+        joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
+            gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=0.0, damping=0.0),
+        ),
+        rigid_props=sim_utils.RigidBodyPropertiesCfg(disable_gravity=True, max_depenetration_velocity=5.0),
+        articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+            enabled_self_collisions=False,
+            solver_position_iteration_count=12,
+            solver_velocity_iteration_count=4,
+            fix_root_link=True,
+        ),
+    ),
+    init_state=ArticulationCfg.InitialStateCfg(
+        pos=(0.0, 0.0, 0.0),
+        # Parked above the table, fingers down (Rx(π)), gripper open.
+        joint_pos={"fg_x": 0.45, "fg_y": 0.0, "fg_z": 0.40, "fg_rz": 0.0, "fg_ry": 0.0,
+                   "fg_rx": math.pi, "panda_finger_joint1": 0.04, "panda_finger_joint2": 0.04},
+        joint_vel={".*": 0.0},
+    ),
+    soft_joint_pos_limit_factor=1.0,
+    actuators={
+        "float_xyz": ImplicitActuatorCfg(
+            joint_names_expr=["fg_[xyz]"], effort_limit_sim=500.0, velocity_limit_sim=5.0,
+            stiffness=5000.0, damping=300.0,
+        ),
+        "float_rot": ImplicitActuatorCfg(
+            joint_names_expr=["fg_r[xyz]"], effort_limit_sim=100.0, velocity_limit_sim=10.0,
+            stiffness=500.0, damping=30.0,
+        ),
+        # Franka Hand spec: 70 N continuous, 140 N peak grasp force.
+        "panda_hand": ImplicitActuatorCfg(
+            joint_names_expr=["panda_finger_joint.*"], effort_limit_sim=140.0, velocity_limit_sim=0.2,
+            stiffness=5000.0, damping=150.0,
+        ),
+    },
 )
 # Union of train + eval real-object families — used only to size the contact
 # filter and pre-declare RigidObjectCfg fields; harmless if some are unused
@@ -210,6 +273,31 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
     grasp_width_bounds: tuple = (0.01, 0.08)
     # False = Path A (xyz + tilt + roll, pin j5/j7). True = 6D contact pairs.
     two_point_grasp: bool = True
+    # "top_down": contact pair, palm always vertical, wrist pinned (two_point_grasp).
+    # "six_dof":  contact pair + approach angle ψ, any gripper orientation from
+    #             top-down to horizontal; full 7-joint pose IK at the pad centres.
+    grasp_mode: str = "top_down"
+    # Frame of the point-cloud observation and of the contact actions:
+    # "object"   — the object's own (settled) frame. Privileged: needs the object
+    #              pose, which a real robot does not have.
+    # "centroid" — world-aligned axes, origin at the centroid of the observed
+    #              (noisy, partial) cloud. Computable from depth alone.
+    # None → "centroid" for six_dof, "object" for top_down.
+    obs_frame: str | None = None
+    # "floating": Franka hand only (FLOATING_HAND_CFG) — grasp choice isolated from
+    #             arm reachability. "franka_arm": full arm with 7-joint pose IK.
+    six_dof_executor: str = "floating"
+    # Execution noise on the grasp pose (std), so learned grasps tolerate the
+    # placement error of a real arm. Set both to 0 for exact debugging.
+    six_dof_exec_noise_pos_m: float = 0.01
+    six_dof_exec_noise_rot_rad: float = math.radians(5.0)
+    six_dof_max_tilt_rad: float = math.pi / 2   # |ψ| limit: 90° = horizontal approach
+    six_dof_standoff_m: float = 0.10            # pre-grasp distance back along the approach
+    six_dof_hover_m: float = 0.08               # first half of approach: pre-grasp + this up
+    six_dof_ik_lambda: float = 0.05             # DLS damping
+    six_dof_rot_weight: float = 0.3             # m per rad: orientation vs position in the IK
+    six_dof_max_pos_err_m: float = 0.05         # per-step error clamp (keeps DLS linear)
+    six_dof_max_rot_err_rad: float = 0.3
     # Snap decoded contact(s) onto mesh surface (fallback: nearest PC sample).
     project_grasp_to_pc: bool = True
     # Top-down: cast ray from (x,y,z_top) → −Z to hit the visible upper surface.
@@ -291,9 +379,8 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
     hand_tuck_joint_names: list = []    # none — parallel gripper only
     leg_joint_names: list = []          # none — fixed-base arm
     ee_body_name: str = "panda_hand"
-    finger_contact_prim_path: str = (
-        "/World/envs/env_.*/Robot/panda_(left|right)finger"
-    )
+    # Contact sensors on <path>/panda_leftfinger and <path>/panda_rightfinger.
+    finger_contact_robot_path: str = "/World/envs/env_.*/Robot"
     # Ignore table contacts — only count finger forces against grasp objects.
     finger_contact_filter_paths: list = OBJECT_CONTACT_FILTER_PATHS
     gripper_open_val: float  = 0.04     # 4 cm per finger → 8 cm aperture

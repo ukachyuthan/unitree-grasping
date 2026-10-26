@@ -1,0 +1,102 @@
+<?xml version="1.0"?>
+<!--
+  Floating Franka Panda hand for learning WHERE to grasp, independent of arm
+  kinematics: the hand hangs from six virtual joints (x, y, z prismatic, then
+  yaw-pitch-roll revolute, R = Rz·Ry·Rx) on a fixed base at the env origin.
+  Hand / finger links, finger joints, meshes and collision boxes are copied from
+  panda_description (example-robot-data, Apache-2.0, see LICENSE.panda_description);
+  link and joint names are kept so the env's finger / contact code works unchanged.
+  The finger_joint2 mimic is dropped — the env drives both finger joints.
+-->
+<robot name="floating_panda_hand">
+  <link name="fg_base">
+    <inertial><mass value="0.01"/><inertia ixx="1e-5" ixy="0" ixz="0" iyy="1e-5" iyz="0" izz="1e-5"/></inertial>
+  </link>
+  <link name="fg_link_x">
+    <inertial><mass value="0.01"/><inertia ixx="1e-5" ixy="0" ixz="0" iyy="1e-5" iyz="0" izz="1e-5"/></inertial>
+  </link>
+  <link name="fg_link_y">
+    <inertial><mass value="0.01"/><inertia ixx="1e-5" ixy="0" ixz="0" iyy="1e-5" iyz="0" izz="1e-5"/></inertial>
+  </link>
+  <link name="fg_link_z">
+    <inertial><mass value="0.01"/><inertia ixx="1e-5" ixy="0" ixz="0" iyy="1e-5" iyz="0" izz="1e-5"/></inertial>
+  </link>
+  <link name="fg_link_rz">
+    <inertial><mass value="0.01"/><inertia ixx="1e-5" ixy="0" ixz="0" iyy="1e-5" iyz="0" izz="1e-5"/></inertial>
+  </link>
+  <link name="fg_link_ry">
+    <inertial><mass value="0.01"/><inertia ixx="1e-5" ixy="0" ixz="0" iyy="1e-5" iyz="0" izz="1e-5"/></inertial>
+  </link>
+
+  <joint name="fg_x" type="prismatic">
+    <parent link="fg_base"/><child link="fg_link_x"/>
+    <axis xyz="1 0 0"/><limit lower="-1.5" upper="1.5" effort="1000" velocity="10"/>
+  </joint>
+  <joint name="fg_y" type="prismatic">
+    <parent link="fg_link_x"/><child link="fg_link_y"/>
+    <axis xyz="0 1 0"/><limit lower="-1.5" upper="1.5" effort="1000" velocity="10"/>
+  </joint>
+  <joint name="fg_z" type="prismatic">
+    <parent link="fg_link_y"/><child link="fg_link_z"/>
+    <axis xyz="0 0 1"/><limit lower="-0.5" upper="1.5" effort="1000" velocity="10"/>
+  </joint>
+  <joint name="fg_rz" type="revolute">
+    <parent link="fg_link_z"/><child link="fg_link_rz"/>
+    <axis xyz="0 0 1"/><limit lower="-3.5" upper="3.5" effort="200" velocity="20"/>
+  </joint>
+  <joint name="fg_ry" type="revolute">
+    <parent link="fg_link_rz"/><child link="fg_link_ry"/>
+    <axis xyz="0 1 0"/><limit lower="-3.5" upper="3.5" effort="200" velocity="20"/>
+  </joint>
+  <joint name="fg_rx" type="revolute">
+    <parent link="fg_link_ry"/><child link="panda_hand"/>
+    <axis xyz="1 0 0"/><limit lower="-3.5" upper="3.5" effort="200" velocity="20"/>
+  </joint>
+
+  <link name="panda_hand">
+    <visual><geometry><mesh filename="meshes/visual/hand.dae"/></geometry></visual>
+    <collision><geometry><mesh filename="meshes/collision/hand.stl"/></geometry></collision>
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.01 0 0.03"/>
+      <mass value="0.73"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.0025" iyz="0" izz="0.0017"/>
+    </inertial>
+  </link>
+
+  <link name="panda_leftfinger">
+    <visual><geometry><mesh filename="meshes/visual/finger.dae"/></geometry></visual>
+    <collision><origin rpy="0 0 0" xyz="0 18.5e-3 11e-3"/><geometry><box size="22e-3 15e-3 20e-3"/></geometry></collision>
+    <collision><origin rpy="0 0 0" xyz="0 6.8e-3 2.2e-3"/><geometry><box size="22e-3 8.8e-3 3.8e-3"/></geometry></collision>
+    <collision><origin rpy="0.5235987755982988 0 0" xyz="0 15.9e-3 28.35e-3"/><geometry><box size="17.5e-3 7e-3 23.5e-3"/></geometry></collision>
+    <collision><origin rpy="0 0 0" xyz="0 7.58e-3 45.25e-3"/><geometry><box size="17.5e-3 15.2e-3 18.5e-3"/></geometry></collision>
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="0.015"/>
+      <inertia ixx="2.375e-06" ixy="0" ixz="0" iyy="2.375e-06" iyz="0" izz="7.5e-07"/>
+    </inertial>
+  </link>
+  <link name="panda_rightfinger">
+    <visual><origin rpy="0 0 3.141592653589793" xyz="0 0 0"/><geometry><mesh filename="meshes/visual/finger.dae"/></geometry></visual>
+    <collision><origin rpy="0 0 0" xyz="0 -18.5e-3 11e-3"/><geometry><box size="22e-3 15e-3 20e-3"/></geometry></collision>
+    <collision><origin rpy="0 0 0" xyz="0 -6.8e-3 2.2e-3"/><geometry><box size="22e-3 8.8e-3 3.8e-3"/></geometry></collision>
+    <collision><origin rpy="-0.5235987755982988 0 0" xyz="0 -15.9e-3 28.35e-3"/><geometry><box size="17.5e-3 7e-3 23.5e-3"/></geometry></collision>
+    <collision><origin rpy="0 0 0" xyz="0 -7.58e-3 45.25e-3"/><geometry><box size="17.5e-3 15.2e-3 18.5e-3"/></geometry></collision>
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="0.015"/>
+      <inertia ixx="2.375e-06" ixy="0" ixz="0" iyy="2.375e-06" iyz="0" izz="7.5e-07"/>
+    </inertial>
+  </link>
+  <joint name="panda_finger_joint1" type="prismatic">
+    <parent link="panda_hand"/><child link="panda_leftfinger"/>
+    <origin rpy="0 0 0" xyz="0 0 0.0584"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="100" lower="0.0" upper="0.04" velocity="0.2"/>
+  </joint>
+  <joint name="panda_finger_joint2" type="prismatic">
+    <parent link="panda_hand"/><child link="panda_rightfinger"/>
+    <origin rpy="0 0 0" xyz="0 0 0.0584"/>
+    <axis xyz="0 -1 0"/>
+    <limit effort="100" lower="0.0" upper="0.04" velocity="0.2"/>
+  </joint>
+</robot>

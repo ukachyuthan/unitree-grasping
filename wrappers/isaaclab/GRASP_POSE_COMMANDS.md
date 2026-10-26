@@ -14,6 +14,66 @@ cd ~/Documents/Collab_Research/unitree-grasping
 
 ---
 
+## 6-DoF grasping (default)
+
+`--grasp_mode six_dof` (default in train and play) learns **where and from which
+direction** to grasp, from the point cloud alone:
+
+- **Observation:** 128-point cloud, world-aligned axes, origin at the centroid of
+  the observed (noisy) points. No object pose is used.
+- **Action (7):** contact points c1, c2 (in that same frame) + approach angle ψ about
+  the jaw axis c1→c2. ψ = 0 is the most top-down approach, ±90° is horizontal (from
+  the side). The approach can never come from below the table.
+- **Executor (`--executor floating`, default):** a floating Franka hand, not the arm,
+  so the reward measures the grasp and not this arm's reachability. It is teleported
+  to a pre-grasp 10 cm back along the approach, inserts in a straight line, closes,
+  and lifts. On a real robot a motion planner executes the chosen grasp.
+  `--executor franka_arm` runs the full arm with 7-joint pose IK instead.
+- **Execution noise:** ±1 cm / ±5° (std) on the executed pose, so learned grasps
+  tolerate real-arm placement error. `play --no_exec_noise` turns it off.
+- **Success:** the object reaches `lift_target_m` (5 cm) with finger force on the
+  object, not the table. Episodes are lift-only (no pick-and-place).
+
+**Warm start from Contact-GraspNet** (so RL does not start cold). One-time setup:
+a separate `graspnet` conda env (torch cu128) with
+[contact_graspnet_pytorch](https://github.com/elchun/contact_graspnet_pytorch) cloned to
+`~/contact_graspnet_pytorch` (`pip install --no-build-isolation -e .`, plus `pyrender embreex`).
+
+```bash
+# 1. Label every object: ray-cast depth views of the object on a table, run the
+#    pretrained Panda Contact-GraspNet, keep the best grasps → <instance>_graspnet.json
+#    (~12 s per object; these also switch on the env's graspnet reward term)
+conda activate graspnet
+PYOPENGL_PLATFORM=egl python scripts/generate_graspnet_labels.py --data data/objects/train
+PYOPENGL_PLATFORM=egl python scripts/generate_graspnet_labels.py --data data/objects/eval
+
+# 2. Distil them into the RL actor (BC, env-identical observations; sim-free)
+conda activate unitree_isaaclab
+python scripts/pretrain_grasp_6dof.py          # → data/grasp_weights/grasp_6dof_pretrain_best.pt
+```
+
+```bash
+cd wrappers/isaaclab
+
+# Train (6-DoF, floating hand), warm-started from the GraspNet BC policy
+python scripts/train_grasp_pose.py --headless --num_envs 256 --max_iters 2000 \
+  --pretrain ../../data/grasp_weights/grasp_6dof_pretrain_best.pt
+
+# Scripted antipodal grasps from a chosen approach angle, recorded + rendered
+python scripts/play_grasp_pose.py --headless --num_envs 1 --num_episodes 5 --video_episodes 5 \
+  --debug_action antipodal --debug_psi 90 --no_exec_noise --record ../../data/viz/side.npz
+python scripts/render_recording.py ../../data/viz/side.npz      # → data/viz/side.mp4
+
+# Evaluate / record a trained 6-DoF checkpoint
+python scripts/play_grasp_pose.py --headless --num_envs 1 --num_episodes 20 --video_episodes 10 \
+  --checkpoint data/grasp_logs/<run>/grasp_pose_<iter>.pt --record ../../data/viz/eval.npz
+```
+
+The top-down contact-pair mode below is `--grasp_mode top_down`; its checkpoints
+(6-D actions, object-frame observations) are not compatible with 6-DoF.
+
+---
+
 ## Train
 
 ```bash

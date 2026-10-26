@@ -16,6 +16,7 @@ Usage:
 """
 
 import argparse
+import math
 import os
 import sys
 
@@ -24,7 +25,7 @@ from isaaclab.app import AppLauncher
 parser = argparse.ArgumentParser(description="Play grasp-pose RL policy")
 parser.add_argument("--checkpoint", type=str, default=None,
                     help="Trained .pt (omit with --debug_action)")
-parser.add_argument("--debug_action", type=str, choices=["zero", "random", "antipodal", "center"],
+parser.add_argument("--debug_action", type=str, choices=["zero", "random", "antipodal", "center", "graspnet"],
                     default=None,
                     help="Skip checkpoint; use fixed/oracle action for IK/exec debug. "
                          "'antipodal' loads best horizontal antipodal (c1,c2) per shape. "
@@ -64,6 +65,19 @@ parser.add_argument("--use_real_objects", type=lambda s: s.lower() != "false", d
 parser.add_argument("--variants_per_family", type=int, default=1,
                     help="Instances per family to evaluate on. 1 (default) = original objects "
                          "only, so --cycle_shapes stays one object per family; 0 = all variants.")
+parser.add_argument("--executor", type=str, default="floating", choices=["floating", "franka_arm"],
+                    help="six_dof execution: floating Franka hand (learn the grasp, not arm "
+                         "reachability) or the full Franka arm with pose IK.")
+parser.add_argument("--no_exec_noise", action="store_true",
+                    help="six_dof: execute the grasp exactly (no ±1 cm / ±5° placement noise).")
+parser.add_argument("--grasp_mode", type=str, default="six_dof", choices=["six_dof", "top_down"],
+                    help="six_dof: contacts + approach angle, any orientation (7-D action). "
+                         "top_down: the earlier vertical-palm contact-pair mode (6-D).")
+parser.add_argument("--debug_rank", type=int, default=0,
+                    help="--debug_action graspnet: which Contact-GraspNet grasp to execute (0 = best).")
+parser.add_argument("--debug_psi", type=float, default=0.0,
+                    help="six_dof debug actions: approach angle in degrees about the jaw axis "
+                         "(0 = most top-down, ±90 = horizontal / from the side).")
 parser.add_argument("--record", type=str, default=None,
                     help="Headless alternative to --video: save env 0's state every physics step "
                          "for the first --video_episodes episodes to this .npz, then render it "
@@ -346,6 +360,37 @@ def _decode_action(action: torch.Tensor, cfg: GraspPoseEnvCfg) -> dict:
     }
 
 
+def graspnet_action_for_shape(u, shape: str, rank: int) -> torch.Tensor:
+    """six_dof action executing the rank-th Contact-GraspNet grasp (<instance>_graspnet.json,
+    scripts/generate_graspnet_labels.py) for env 0's object. Falls back to the zero
+    action when the object has no labels."""
+    import json
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
+    from pretrain_grasp_6dof import psi_of
+
+    path = shape_asset(shape, "_graspnet.json")
+    grasps = json.load(open(path))["grasps"] if path.exists() else []
+    if not grasps:
+        print(f"  [graspnet] no labels for {shape} — zero action")
+        return torch.zeros(u.num_envs, int(u.cfg.action_space), device=u.device)
+    g = grasps[min(rank, len(grasps) - 1)]
+    s = float(u.cfg.object_scale)
+    c1 = torch.tensor([g["c1"]], device=u.device) * s
+    c2 = torch.tensor([g["c2"]], device=u.device) * s
+    psi = psi_of(c1, c2, torch.tensor([g["approach"]], device=u.device))
+    return u.encode_six_dof_action(c1.expand(u.num_envs, -1), c2.expand(u.num_envs, -1), psi.expand(u.num_envs))
+
+
+def _denorm_contacts(action: torch.Tensor, cfg: GraspPoseEnvCfg):
+    """Normalized (tanh-space) object-local contact pair → metres, (B, 3) each."""
+    lo = torch.tensor([cfg.grasp_x_bounds[0], cfg.grasp_y_bounds[0], cfg.grasp_z_bounds[0]],
+                      device=action.device)
+    hi = torch.tensor([cfg.grasp_x_bounds[1], cfg.grasp_y_bounds[1], cfg.grasp_z_bounds[1]],
+                      device=action.device)
+    a = action.clamp(-1, 1)
+    return (a[:, 0:3] + 1) / 2 * (hi - lo) + lo, (a[:, 3:6] + 1) / 2 * (hi - lo) + lo
+
+
 def rollout_dense_frames(env: GraspPoseEnv, action: torch.Tensor, recorder=None, shape=None) -> list:
     """Step physics manually and capture an rgb frame (and/or recorder state) each sub-step."""
     u = env.unwrapped
@@ -416,8 +461,18 @@ def main():
     if args.no_project_pc or args.debug_action in ("antipodal", "random"):
         env_cfg.project_grasp_to_pc = False
         print("[play] project_grasp_to_pc=False (exact contacts for IK debug)")
+    env_cfg.grasp_mode = args.grasp_mode
+    env_cfg.six_dof_executor = args.executor
+    if args.no_exec_noise:
+        env_cfg.six_dof_exec_noise_pos_m = 0.0
+        env_cfg.six_dof_exec_noise_rot_rad = 0.0
+    if args.grasp_mode == "six_dof":
+        if args.path_a or args.debug_action == "center":
+            print("[play] --path_a / --debug_action center are top_down-only; use --grasp_mode top_down")
+            sys.exit(1)
+        print(f"[play] grasp_mode=six_dof  action=c1,c2,psi  debug_psi={args.debug_psi}deg")
     # Path A single-point smoke test (center on object PC).
-    if args.path_a or args.debug_action == "center":
+    elif args.path_a or args.debug_action == "center":
         env_cfg.two_point_grasp = False
         env_cfg.action_space = 6
         print("[play] path_a=True  action=center+tilt+roll+width")
@@ -489,6 +544,8 @@ def main():
         shape = env.unwrapped._shape_names[env.unwrapped._env_shape[0].item()]
         if args.debug_action == "zero":
             action = torch.zeros(args.num_envs, n_act, device=device)
+            if args.grasp_mode == "six_dof":
+                action[:, 6] = math.radians(args.debug_psi) / env_cfg.six_dof_max_tilt_rad
         elif args.debug_action == "random":
             action = random_contact_pair_action(env_cfg, device)
             if args.num_envs > 1:
@@ -501,10 +558,17 @@ def main():
             action = center_action_for_shape(shape, env_cfg, device)
             if args.num_envs > 1:
                 action = action.expand(args.num_envs, -1).clone()
+        elif args.debug_action == "graspnet":
+            action = graspnet_action_for_shape(env.unwrapped, shape, args.debug_rank)
         else:
             obs = _obs_tensor(obs_dict, device)
             with torch.no_grad():
                 action = policy.act_inference(obs)
+        if args.grasp_mode == "six_dof" and args.debug_action in ("random", "antipodal"):
+            # Debug helpers give object-local contacts (normalized); re-express them
+            # in the observation frame and append the approach angle.
+            c1, c2 = _denorm_contacts(action, env_cfg)
+            action = env.unwrapped.encode_six_dof_action(c1, c2, math.radians(args.debug_psi))
 
         grasp_used = None
         if (args.video or recorder is not None) and ep <= args.video_episodes:
@@ -553,7 +617,9 @@ def main():
                 f"c1=({c1[0]:+.3f},{c1[1]:+.3f},{c1[2]:+.3f})  "
                 f"c2=({c2[0]:+.3f},{c2[1]:+.3f},{c2[2]:+.3f})  "
                 f"width={width_m:.3f}m  "
-                f"mid_err={fe*100:.1f}cm  palm_err={pe*100:.1f}cm  jaw={ja:.2f}  "
+                + (f"psi={math.degrees(float(u._six_psi[0])):+.0f}deg  "
+                   if args.grasp_mode == "six_dof" else "")
+                + f"mid_err={fe*100:.1f}cm  palm_err={pe*100:.1f}cm  jaw={ja:.2f}  "
                 f"open L/R→c={le*100:.1f}/{re_*100:.1f}cm  "
                 f"closed L/R→c={lec*100:.1f}/{rec*100:.1f}cm"
             )
