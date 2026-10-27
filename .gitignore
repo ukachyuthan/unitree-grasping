@@ -45,6 +45,11 @@ data/checkpoints/*
 data/objects/*
 data/viz/*
 data/vr_failures/*
+data/vr_failures_archive/
+data/teacher_demos*/
+data/failure_analysis/
+data/train_runs/
+data/*.log
 data/ycb_raw/*
 *.log
 runs/
