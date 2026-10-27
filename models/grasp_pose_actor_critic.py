@@ -59,6 +59,9 @@ class GraspPoseActorCritic(nn.Module):
 
         # Learnable per-dimension noise std (starts at init_noise_std)
         self.std = nn.Parameter(init_noise_std * torch.ones(num_actions))
+        # Floor on the exploration noise (set by the trainer; keeps PPO from
+        # collapsing the policy to near-deterministic before it stops improving).
+        self.min_std = 1e-4
         self.distribution = None
         Normal.set_default_validate_args(False)
 
@@ -91,7 +94,7 @@ class GraspPoseActorCritic(nn.Module):
     def update_distribution(self, observations: torch.Tensor):
         feat = self._encode_pc(observations, self.actor_encoder)
         mean = self.actor_head(feat)
-        std  = self.std.clamp(min=1e-4).expand_as(mean)
+        std  = self.std.clamp(min=self.min_std).expand_as(mean)
         self.distribution = Normal(mean, std)
 
     def act(self, observations: torch.Tensor, **kwargs):

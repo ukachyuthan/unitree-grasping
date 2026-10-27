@@ -50,6 +50,14 @@ parser.add_argument("--use_real_objects", type=lambda s: s.lower() != "false", d
 parser.add_argument("--executor", type=str, default="floating", choices=["floating", "franka_arm"],
                     help="six_dof execution: floating Franka hand (learn the grasp, not arm "
                          "reachability) or the full Franka arm with pose IK.")
+parser.add_argument("--entropy_coef", type=float, default=0.02,
+                    help="PPO entropy bonus (exploration). Raise it if success plateaus while "
+                         "entropy keeps falling.")
+parser.add_argument("--min_std", type=float, default=1e-4,
+                    help="Floor on the policy's action noise (tanh action units).")
+parser.add_argument("--reset_std", type=float, default=None,
+                    help="After --resume/--pretrain, reset the action noise to this value "
+                         "(re-opens exploration of a collapsed policy).")
 parser.add_argument("--grasp_mode", type=str, default="six_dof", choices=["six_dof", "top_down"],
                     help="six_dof: contact pair + approach angle, any gripper orientation (7-D "
                          "action, centroid-frame point cloud). top_down: vertical palm (6-D).")
@@ -79,6 +87,17 @@ parser.add_argument("--vr_success_lift", type=float, default=1.0,
 parser.add_argument("--vr_warmup_iters", type=int, default=50,
                     help="Don't queue failures for the first N iterations (untrained policy).")
 parser.add_argument("--vr_max_cases", type=int, default=200)
+parser.add_argument("--demos_dir", type=str, nargs="+", default=None,
+                    help="Demo roots (<root>/<run>/demos/<case>/*.json): VR demos in the failure "
+                         "dataset (data/vr_failures) and/or sim-teacher demos "
+                         "(scripts/teach_failure_cases.py). Demo cases are replayed at their pose "
+                         "with an imitation loss toward the demonstrated grasp (six_dof only).")
+parser.add_argument("--demo_sources", type=str, nargs="+", default=None,
+                    choices=["webxr-hands", "sim-teacher"], help="Only demos from these sources.")
+parser.add_argument("--demo_replay_prob", type=float, default=0.1,
+                    help="Per env per step: chance the next episode replays a demo case.")
+parser.add_argument("--bc_coef", type=float, default=1.0,
+                    help="Weight of the imitation loss on demo episodes.")
 parser.add_argument("--render_interval", type=int, default=None,
                     help="Physics steps between viewport redraws when running with the GUI "
                          "(no --headless). Default renders once per grasp attempt, which shows "
@@ -114,6 +133,7 @@ from models.grasp_pose_actor_critic import GraspPoseActorCritic
 from envs._object_registry import shape_asset
 from envs._paths import data_path
 from training.vr_failures import FailureCurator, FailureCuratorConfig
+from training.demo_replay import DemoReplayer, impossible_failure_keys, load_demos
 
 
 def _obs_tensor(obs_td, device):
@@ -191,6 +211,11 @@ def _make_failure_curator(u, run_name: str) -> FailureCurator | None:
         max_cases=args.vr_max_cases,
         seed=args.seed,
     )
+    # Situations a demonstrator already marked impossible are not exported again.
+    impossible = impossible_failure_keys(out_dir)
+    if impossible:
+        print(f"[grasp-pose-train] vr failures: {len(impossible)} (shape, yaw bin) keys marked "
+              f"impossible will not be exported")
     return FailureCurator(
         cfg,
         num_envs=u.num_envs,
@@ -198,11 +223,43 @@ def _make_failure_curator(u, run_name: str) -> FailureCurator | None:
         object_pcs=u._obj_pcs.detach().cpu().numpy(),
         mesh_path_fn=mesh_path,
         scene=scene,
+        impossible_keys=impossible,
     )
 
 
+def _demo_targets(u, demos: DemoReplayer, device):
+    """Action targets (B, A) and mask (B,) for the demo episodes env.step() just spawned.
+    Must run after the step: the target is expressed in the new episode's observation frame."""
+    ids, c1, c2, psi = demos.take_started()
+    B = u.num_envs
+    mask = torch.zeros(B, dtype=torch.bool, device=device)
+    tgt = torch.zeros(B, int(u.cfg.action_space), device=device)
+    if len(ids):
+        ids_t = torch.as_tensor(ids, device=u.device)
+        c1_all = torch.zeros(B, 3, device=u.device)
+        c2_all = torch.zeros(B, 3, device=u.device)
+        psi_all = torch.zeros(B, device=u.device)
+        c1_all[ids_t] = torch.as_tensor(c1, dtype=torch.float32, device=u.device)
+        c2_all[ids_t] = torch.as_tensor(c2, dtype=torch.float32, device=u.device)
+        psi_all[ids_t] = torch.as_tensor(psi, dtype=torch.float32, device=u.device)
+        tgt = u.encode_six_dof_action(c1_all, c2_all, psi_all).to(device)
+        mask[ids_t.to(device)] = True
+    return tgt, mask
+
+
+def demo_imitation_loss(mean, tgt, mask):
+    """Mean distance from the policy's action mean to the demo action, taking the
+    closer finger order (c1↔c2 with ψ→−ψ is the same grasp)."""
+    if not mask.any():
+        return mean.new_zeros(())
+    m, t = mean[mask], tgt[mask]
+    swap = torch.cat([t[:, 3:6], t[:, 0:3], -t[:, 6:7]], dim=-1)
+    return torch.minimum((m - t).norm(dim=-1), (m - swap).norm(dim=-1)).mean()
+
+
 def ppo_update(ac, optimizer, obs, actions, old_logp, returns, advantages,
-               clip_param, value_coef, entropy_coef, max_grad_norm):
+               clip_param, value_coef, entropy_coef, max_grad_norm,
+               demo_tgt=None, demo_mask=None, bc_coef=0.0):
     ac.act(obs)
     logp = ac.get_actions_log_prob(actions)
     entropy = ac.entropy.mean()
@@ -215,16 +272,21 @@ def ppo_update(ac, optimizer, obs, actions, old_logp, returns, advantages,
 
     value_loss = 0.5 * (returns - values).pow(2).mean()
     loss = policy_loss + value_coef * value_loss - entropy_coef * entropy
+    bc_loss = torch.zeros((), device=obs.device)
+    if demo_mask is not None and bc_coef > 0.0:
+        bc_loss = demo_imitation_loss(ac.action_mean, demo_tgt, demo_mask)
+        loss = loss + bc_coef * bc_loss
 
     optimizer.zero_grad()
     loss.backward()
     grad_norm = torch.nn.utils.clip_grad_norm_(ac.parameters(), max_grad_norm)
     optimizer.step()
-    return policy_loss.item(), value_loss.item(), entropy.item(), loss.item(), grad_norm.item()
+    return (policy_loss.item(), value_loss.item(), entropy.item(), loss.item(), grad_norm.item(),
+            bc_loss.item())
 
 
 def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=None,
-              curator=None, lr=3e-4,
+              curator=None, demos=None, bc_coef=1.0, lr=3e-4,
               num_steps_per_env=16, num_epochs=5, num_mini_batches=4,
               clip_param=0.2, value_coef=1.0, entropy_coef=0.02,
               max_grad_norm=1.0, save_interval=25):
@@ -232,10 +294,15 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
     num_envs = env.num_envs
     batch_size = num_envs * num_steps_per_env
     mini_batch_size = max(1, batch_size // num_mini_batches)
+    u = env.unwrapped
+    # Demo targets of the episodes currently set up in each env (filled after each step).
+    demo_tgt = torch.zeros(num_envs, int(u.cfg.action_space), device=device)
+    demo_mask = torch.zeros(num_envs, dtype=torch.bool, device=device)
 
     for it in range(1, max_iters + 1):
         obs_buf, act_buf, logp_buf, rew_buf, val_buf = [], [], [], [], []
         success_buf = []   # per episode: object reached the lift target (env._last_lift_success)
+        demo_tgt_buf, demo_mask_buf = [], []
 
         obs_td = env.get_observations()
         for _ in range(num_steps_per_env):
@@ -247,30 +314,44 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
                 values = ac.evaluate(obs).squeeze(-1)
 
             ctx = None
+            replay_ids = []
             if curator is not None:
-                ctx = _episode_context(env.unwrapped)
+                ctx = _episode_context(u)
                 # The resets inside env.step() spawn the next episodes, so replays
                 # of queued failures must be scheduled before it.
                 replays = curator.plan_replays(it)
+                replay_ids = replays["env_ids"]
                 if len(replays["env_ids"]):
-                    env.unwrapped.queue_replays(**replays)
+                    u.queue_replays(**replays)
+            if demos is not None:
+                plan = demos.plan(exclude_env_ids=replay_ids)
+                if len(plan["env_ids"]):
+                    u.queue_replays(**plan)
             obs_td, rew, _, _ = env.step(actions)
             if curator is not None:
-                for case_id in curator.observe(it, **ctx, **_episode_outcome(env.unwrapped, rew)):
+                outcome = _episode_outcome(u, rew)
+                for case_id in curator.observe(it, **ctx, **outcome, skip=demo_mask.cpu().numpy()):
                     print(f"  [vr-failures] exported case {case_id}")
 
             obs_buf.append(obs)
             act_buf.append(actions)
             logp_buf.append(logp)
             rew_buf.append(rew.to(device))
-            success_buf.append(env.unwrapped._last_lift_success.to(device))
+            success_buf.append(u._last_lift_success.to(device))
             val_buf.append(values)
+            demo_tgt_buf.append(demo_tgt)
+            demo_mask_buf.append(demo_mask)
+            if demos is not None:
+                demo_tgt, demo_mask = _demo_targets(u, demos, device)
 
         obs_all = torch.cat(obs_buf, dim=0)
         act_all = torch.cat(act_buf, dim=0)
         logp_all = torch.cat(logp_buf, dim=0)
         rew_all = torch.cat(rew_buf, dim=0)
         val_all = torch.cat(val_buf, dim=0)
+        demo_tgt_all = torch.cat(demo_tgt_buf, dim=0)
+        demo_mask_all = torch.cat(demo_mask_buf, dim=0)
+        success_all = torch.cat(success_buf).float()
 
         # One-step episodes: return = reward, advantage = return - value
         returns = rew_all
@@ -278,17 +359,18 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
         last_policy_loss = last_value_loss = last_entropy = 0.0
-        last_total_loss = last_grad_norm = 0.0
+        last_total_loss = last_grad_norm = last_bc_loss = 0.0
         for _ in range(num_epochs):
             perm = torch.randperm(batch_size, device=device)
             for start in range(0, batch_size, mini_batch_size):
                 idx = perm[start : start + mini_batch_size]
                 (last_policy_loss, last_value_loss, last_entropy,
-                 last_total_loss, last_grad_norm) = ppo_update(
+                 last_total_loss, last_grad_norm, last_bc_loss) = ppo_update(
                     ac, optimizer,
                     obs_all[idx], act_all[idx], logp_all[idx],
                     returns[idx], advantages[idx],
                     clip_param, value_coef, entropy_coef, max_grad_norm,
+                    demo_tgt_all[idx], demo_mask_all[idx], bc_coef if demos is not None else 0.0,
                 )
 
         mean_rew = rew_all.mean().item()
@@ -297,7 +379,7 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
         max_rew = rew_all.max().item()
         # Success = object lifted to the target; shaping terms (contact, surface,
         # graspnet, place) never count, however much reward they add.
-        success_rate = torch.cat(success_buf).float().mean().item()
+        success_rate = success_all.mean().item()
         mean_value = val_all.mean().item()
         mean_return = returns.mean().item()
         mean_adv = advantages.mean().item()
@@ -338,6 +420,13 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
             stats["vr_cases_exported"] = curator.num_cases
             stats["vr_queue_size"] = curator.queue_size
             stats["vr_replay_success_rate"] = curator.pop_replay_success_rate()
+        if demos is not None:
+            # Does the policy itself now solve the demonstrated cases? (its own sampled
+            # action on demo episodes, not the demo's) — the failure loop's key number.
+            n_demo = int(demo_mask_all.sum())
+            stats["demo_episodes"] = n_demo
+            stats["demo_success_rate"] = success_all[demo_mask_all].mean().item() if n_demo else float("nan")
+            stats["demo_bc_loss"] = last_bc_loss
 
         if metrics_path is not None:
             with open(metrics_path, "a", encoding="utf-8") as f:
@@ -354,6 +443,8 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
                 f"pi_loss={last_policy_loss:.4f}  "
                 f"entropy={last_entropy:.3f}  "
                 f"grad={last_grad_norm:.2f}"
+                + (f"  demo_success={stats['demo_success_rate']*100:.1f}% (n={stats['demo_episodes']})  "
+                   f"bc={last_bc_loss:.3f}" if demos is not None else "")
             )
 
         if writer is not None:
@@ -382,6 +473,10 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
                 writer.add_scalar("vr/queue_size", curator.queue_size, it)
                 if stats["vr_replay_success_rate"] == stats["vr_replay_success_rate"]:  # not NaN
                     writer.add_scalar("vr/replay_success_rate", stats["vr_replay_success_rate"], it)
+            if demos is not None:
+                writer.add_scalar("demo/bc_loss", last_bc_loss, it)
+                if stats["demo_episodes"]:
+                    writer.add_scalar("demo/success_rate", stats["demo_success_rate"], it)
             writer.flush()
 
         if it % save_interval == 0:
@@ -531,6 +626,13 @@ def main():
     else:
         print("[grasp-pose-train] cold start: random initialization")
 
+    ac.min_std = max(args.min_std, 1e-4)
+    if args.reset_std is not None:
+        with torch.no_grad():
+            ac.std.fill_(args.reset_std)
+    print(f"[grasp-pose-train] exploration: entropy_coef={args.entropy_coef}  "
+          f"min_std={ac.min_std}  std={[round(v, 3) for v in ac.std.detach().cpu().tolist()]}")
+
     n_params = sum(p.numel() for p in ac.parameters())
     print(f"[grasp-pose-train] GraspPoseActorCritic ({n_params:,} params)")
 
@@ -546,12 +648,34 @@ def main():
               f"(replay_prob={args.vr_replay_prob}, fail_threshold={args.vr_fail_threshold}, "
               f"warmup={args.vr_warmup_iters} iters)")
 
+    demos = None
+    if args.demos_dir:
+        if env_cfg.grasp_mode != "six_dof":
+            raise ValueError("--demos_dir needs --grasp_mode six_dof")
+        sources = tuple(args.demo_sources) if args.demo_sources else None
+        loaded = load_demos(args.demos_dir, sources)
+        demos = DemoReplayer(loaded, env.unwrapped._shape_names, env.num_envs,
+                             replay_prob=args.demo_replay_prob, seed=args.seed)
+        by_source = {}
+        for d in demos.demos:
+            by_source[d.source] = by_source.get(d.source, 0) + 1
+        print(f"[grasp-pose-train] demos: {len(demos)} usable {by_source} from {args.demos_dir} "
+              f"({demos.num_skipped} skipped: shape not in this env)  "
+              f"replay_prob={args.demo_replay_prob}  bc_coef={args.bc_coef}")
+        if not len(demos):
+            demos = None
+        with open(os.path.join(log_dir, "demos.json"), "w", encoding="utf-8") as f:
+            json.dump([d.path for d in (demos.demos if demos else [])], f, indent=1)
+
     train_ppo(
         env, ac, device, log_dir,
         max_iters=args.max_iters,
+        entropy_coef=args.entropy_coef,
         writer=writer,
         metrics_path=metrics_path,
         curator=curator,
+        demos=demos,
+        bc_coef=args.bc_coef,
     )
 
     writer.close()

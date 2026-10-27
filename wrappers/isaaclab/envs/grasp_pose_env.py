@@ -432,6 +432,11 @@ class GraspPoseEnv(DirectRLEnv):
             self._shape_names = expand_variants(families, self.cfg.variants_per_family)
             print(f"[GraspPoseEnv] {len(self._shape_names)} shapes from {len(families)} families "
                   f"(variants_per_family={self.cfg.variants_per_family or 'all'})")
+        if self.cfg.shape_filter:
+            keep = [s for s in self._shape_names if any(f in s for f in self.cfg.shape_filter)]
+            if not keep:
+                raise ValueError(f"shape_filter {self.cfg.shape_filter} matches no shape")
+            self._shape_names = keep
         self._num_shapes = len(self._shape_names)
 
         self._robot = Articulation(self.cfg.robot)
@@ -1465,6 +1470,26 @@ class GraspPoseEnv(DirectRLEnv):
 
     # Hand frame → pad centre (finger joints at +0.0584, pads 0.045 further).
     _FLOAT_TCP_OFFSET_M = 0.0584
+    # Fingertip collision box (URDF), relative to its finger joint: tip at +0.0545,
+    # ±0.00875 across the jaw, 0..0.0152 outward from the closing plane.
+    _FINGERTIP_Z_M = 0.0545
+    _FINGERTIP_HALF_X_M = 0.00875
+    _FINGERTIP_OUT_M = 0.0152
+
+    def _fingertip_lift_to_clear_table(self, hand_pos: torch.Tensor, R: torch.Tensor) -> torch.Tensor:
+        """World +z shift (B,) that puts the lowest open-fingertip corner at
+        table_surface_z + six_dof_table_clearance_m (0 if already clear)."""
+        half_open = float(self._gripper_open[0])
+        xs = (-self._FINGERTIP_HALF_X_M, self._FINGERTIP_HALF_X_M)
+        ys = (half_open, half_open + self._FINGERTIP_OUT_M)
+        corners = torch.tensor(
+            [[x, s * y, self._FLOAT_TCP_OFFSET_M + self._FINGERTIP_Z_M]
+             for x in xs for y in ys for s in (1.0, -1.0)],
+            device=self.device,
+        )                                                              # (8, 3) hand frame
+        z_w = hand_pos[:, 2:3] + R[:, 2, :] @ corners.T               # (B, 8) world z
+        floor = self.cfg.table_surface_z + self.cfg.six_dof_table_clearance_m
+        return (floor - z_w.min(dim=1).values).clamp(min=0.0)
 
     def _plan_floating_hand(self):
         """Virtual-joint targets for the floating hand: pre-grasp (standoff back
@@ -1484,6 +1509,8 @@ class GraspPoseEnv(DirectRLEnv):
         R = matrix_from_quat(q)
         z = R[:, :, 2]                                    # executed approach (hand +Z)
         hand_final = tcp - z * (self._FLOAT_TCP_OFFSET_M + self.cfg.finger_pad_offset_m)
+        if self.cfg.six_dof_table_clearance_m is not None:
+            hand_final[:, 2] += self._fingertip_lift_to_clear_table(hand_final, R)
         hand_pre = hand_final - z * self.cfg.six_dof_standoff_m
         root = self._robot.data.root_pos_w
         rot = euler_zyx_from_matrix(R)   # virtual joint order fg_rz, fg_ry, fg_rx

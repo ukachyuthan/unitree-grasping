@@ -69,6 +69,48 @@ python scripts/play_grasp_pose.py --headless --num_envs 1 --num_episodes 20 --vi
   --checkpoint data/grasp_logs/<run>/grasp_pose_<iter>.pt --record ../../data/viz/eval.npz
 ```
 
+### Closing the failure loop (demos → training)
+
+Training exports the cases the policy keeps failing (see "Failure replay queue"
+below). Someone demonstrates them, and the demos come back into training: each
+demo case is replayed at its exact pose, with an imitation loss toward the
+demonstrated grasp on top of PPO (`training/demo_replay.py`).
+
+```bash
+RUN=../../data/vr_failures/<run>
+
+# 1. Hold out half the cases (per family) as a test of generalization; the VR app
+#    hides them and the teacher skips them. Do this once, before any demos.
+python ../../scripts/split_failure_cases.py $RUN
+
+# 2a. Human demos: the VR app (../vr-grasping-project). Press IMPOSSIBLE on a case
+#     no two-finger gripper could lift from that pose; it is then left out of the
+#     metrics and the same (shape, yaw bin) is never exported again.
+# 2b. Or the simulated teacher: best-ranked Contact-GraspNet grasp that lifts twice
+python scripts/teach_failure_cases.py --headless --cases $RUN --out ../../data/teacher_demos
+#     control: the same kind of demos on random objects and poses
+python scripts/teach_failure_cases.py --headless --random_cases 300 --out ../../data/teacher_demos_random
+
+# 3. Check the demos: does the Franka hand reproduce each one? → <root>/verify.json
+python scripts/teach_failure_cases.py --headless --verify ../../data/vr_failures
+
+# 4. Train with them (any mix of roots; --demo_sources webxr-hands|sim-teacher filters)
+python scripts/train_grasp_pose.py --headless --num_envs 256 --max_iters 150 \
+  --resume <checkpoint> --demos_dir ../../data/vr_failures ../../data/teacher_demos
+
+# 5. Did it work? Policy success on the demonstrated and the held-out cases
+python scripts/teach_failure_cases.py --headless --eval_cases $RUN --checkpoint <new checkpoint>
+```
+
+Training logs `demo/success_rate`: the policy's own success on demo episodes
+(not the demo's), the loop's headline number. Demo and verdict files:
+
+```
+<run>/demos/<case_id>/<timestamp>.json   VR demo (contacts + hand frames; ψ = wrist → contacts)
+<run>/verdicts/<case_id>.json            latest verdict: impossible | feasible
+<run>/split.json                         demo / held-out case ids
+```
+
 The top-down contact-pair mode below is `--grasp_mode top_down`; its checkpoints
 (6-D actions, object-frame observations) are not compatible with 6-DoF.
 

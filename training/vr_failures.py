@@ -66,6 +66,9 @@ class FailureCuratorConfig:
     warmup_iters: int = 50
     # Hard cap so a collapsed policy cannot flood the dataset.
     max_cases: int = 200
+    # Export at most one case per failure key (shape, yaw bin): the same object
+    # failing at the same heading is one situation for the demonstrator, not five.
+    one_case_per_key: bool = True
     # Spawn yaw is bucketed into this many bins, as case metadata.
     yaw_bins: int = 8
     # Object point-cloud samples embedded in each case (VR fallback when no mesh).
@@ -129,6 +132,9 @@ class FailureCurator:
         mesh_path_fn: shape name → path of its unscaled OBJ, or None if absent.
         scene: static scene description copied into every case (table, robot
             base, object scale, lift target).
+        impossible_keys: (shape, yaw_bin) failure keys a demonstrator marked
+            impossible (training/demo_replay.impossible_failure_keys); entries
+            with these keys leave the queue instead of being exported again.
     """
 
     def __init__(
@@ -139,6 +145,7 @@ class FailureCurator:
         object_pcs: np.ndarray,
         mesh_path_fn: Callable[[str], Path | None],
         scene: dict,
+        impossible_keys: set[tuple[str, int]] | None = None,
     ):
         if cfg.fail_threshold < 1:
             raise ValueError("fail_threshold must be >= 1")
@@ -148,6 +155,7 @@ class FailureCurator:
         self.object_pcs = np.asarray(object_pcs, dtype=np.float32)
         self.mesh_path_fn = mesh_path_fn
         self.scene = scene
+        self.impossible_keys = set(impossible_keys or ())
         self._rng = np.random.default_rng(cfg.seed)
 
         self.run_dir = Path(cfg.out_dir) / cfg.run_name
@@ -163,7 +171,8 @@ class FailureCurator:
         self._planned: list[QueueEntry | None] = [None] * num_envs
 
         self.stats = {"queued": 0, "rejected_full": 0, "replays": 0, "replay_successes": 0,
-                      "replay_failures": 0}
+                      "replay_failures": 0, "skipped_impossible": 0, "skipped_duplicate": 0}
+        self._exported_keys: set[tuple[str, int]] = set()
         self._window = {"replays": 0, "replay_successes": 0}
         self._mesh_copied: dict[str, str | None] = {}
         self._manifest_cases: list[dict] = []
@@ -222,11 +231,14 @@ class FailureCurator:
         contact_right_local: np.ndarray,
         grasp_center_local: np.ndarray,
         grasp_width: np.ndarray,
+        skip: np.ndarray | None = None,
     ) -> list[str]:
         """Record the batch of episodes that just finished; returns newly exported case ids.
 
         Every array is indexed by env (leading dimension num_envs). ``obj_pos``
         must be relative to the env origin, i.e. in the robot-base frame.
+        ``skip`` marks episodes that must never be queued, e.g. replays of
+        already-demonstrated cases (training/demo_replay.py).
         """
         self.last_iteration = iteration
         shape_ids = np.asarray(shape_ids).reshape(-1).astype(np.int64)
@@ -270,11 +282,17 @@ class FailureCurator:
                 entry.attempts.append(attempt(b, replay=True))
                 if entry.replay_failures >= self.cfg.fail_threshold:
                     del self._queue[entry.entry_id]
-                    if self.num_cases < self.cfg.max_cases:
+                    key = self._failure_key(entry)
+                    if key in self.impossible_keys:
+                        self.stats["skipped_impossible"] += 1
+                    elif self.cfg.one_case_per_key and key in self._exported_keys:
+                        self.stats["skipped_duplicate"] += 1
+                    elif self.num_cases < self.cfg.max_cases:
+                        self._exported_keys.add(key)
                         new_cases.append(self._export_case(entry))
                 continue
 
-            if success or iteration <= self.cfg.warmup_iters:
+            if success or iteration <= self.cfg.warmup_iters or (skip is not None and skip[b]):
                 continue
             self._enqueue(QueueEntry(
                 entry_id=self._next_id,
@@ -324,9 +342,12 @@ class FailureCurator:
         self._queue[entry.entry_id] = entry
         self.stats["queued"] += 1
 
+    def _failure_key(self, entry: QueueEntry) -> tuple[str, int]:
+        return (self.shape_names[entry.shape_id],
+                int(yaw_bin(yaw_from_quat_wxyz(entry.quat_wxyz), self.cfg.yaw_bins)[0]))
+
     def _export_case(self, entry: QueueEntry) -> str:
-        shape = self.shape_names[entry.shape_id]
-        ybin = int(yaw_bin(yaw_from_quat_wxyz(entry.quat_wxyz), self.cfg.yaw_bins)[0])
+        shape, ybin = self._failure_key(entry)
         case_id = f"{shape}__it{entry.queued_at:06d}__q{entry.entry_id}"
         # Never overwrite a case already on disk (e.g. a resumed run reusing the dir).
         suffix = 1

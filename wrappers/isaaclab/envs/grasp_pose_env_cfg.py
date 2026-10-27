@@ -293,6 +293,11 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
     six_dof_exec_noise_rot_rad: float = math.radians(5.0)
     six_dof_max_tilt_rad: float = math.pi / 2   # |ψ| limit: 90° = horizontal approach
     six_dof_standoff_m: float = 0.10            # pre-grasp distance back along the approach
+    # Floating hand: raise the executed grasp so the open fingertips stay this far
+    # above the table (pad centre is ~1 cm short of the tip, so low objects —
+    # knives, markers, lying bottles — otherwise jam the fingers into the table).
+    # None disables it.
+    six_dof_table_clearance_m: float | None = 0.003
     six_dof_hover_m: float = 0.08               # first half of approach: pre-grasp + this up
     six_dof_ik_lambda: float = 0.05             # DLS damping
     six_dof_rot_weight: float = 0.3             # m per rad: orientation vs position in the IK
@@ -493,6 +498,9 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
     # ignoring use_real_objects/procedural shapes — used by play scripts to
     # test zero-shot generalization on never-seen real objects.
     eval_object_mode: bool = False
+    # Keep only shapes whose name contains one of these substrings (debugging
+    # specific families); empty keeps all.
+    shape_filter: tuple = ()
 
     # ── Sensor-realistic point-cloud noise (Gaussian + dropout + outliers) ────
     # Severity is domain-randomized per episode within these ranges — see

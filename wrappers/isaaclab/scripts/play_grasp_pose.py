@@ -75,6 +75,8 @@ parser.add_argument("--grasp_mode", type=str, default="six_dof", choices=["six_d
                          "top_down: the earlier vertical-palm contact-pair mode (6-D).")
 parser.add_argument("--eval_objects", action="store_true",
                     help="Use only the held-out YCB eval objects (data/objects/eval), never seen in training.")
+parser.add_argument("--shapes", type=str, nargs="+", default=None,
+                    help="Only objects whose name contains one of these substrings (e.g. marker knife).")
 parser.add_argument("--debug_rank", type=int, default=0,
                     help="--debug_action graspnet: which Contact-GraspNet grasp to execute (0 = best).")
 parser.add_argument("--debug_psi", type=float, default=0.0,
@@ -462,6 +464,8 @@ def main():
     env_cfg.use_real_objects = args.use_real_objects
     env_cfg.variants_per_family = args.variants_per_family
     env_cfg.eval_object_mode = args.eval_objects
+    if args.shapes:
+        env_cfg.shape_filter = tuple(args.shapes)
     env_cfg.use_camera_pc = False
     env_cfg.visualize_grasp_point = args.visualize_grasp or args.video or not args.headless
     if args.cycle_shapes:

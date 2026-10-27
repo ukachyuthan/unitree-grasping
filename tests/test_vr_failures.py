@@ -221,3 +221,49 @@ def test_load_vr_demos_reads_successful_demos(tmp_path):
     assert [p["mode"] for p in pairs] == ["opposed", "pinch"]
     assert pairs[0]["width"] == pytest.approx(0.04)
     assert len(load_vr_demos(tmp_path, modes=("opposed",))) == 1
+
+
+def test_impossible_keys_are_not_exported_again(tmp_path):
+    c = make_curator(tmp_path, num_envs=1, replay_prob=1.0, fail_threshold=4)
+    c.impossible_keys = {("torus", b) for b in range(c.cfg.yaw_bins)}
+    cases = run(c, FakeEnv(1), 40, lambda s, r: 0.0 if s == 0 else 1.0)
+    assert cases == []
+    assert c.stats["skipped_impossible"] > 0
+
+
+def test_skipped_episodes_are_never_queued(tmp_path):
+    c = make_curator(tmp_path, num_envs=4, replay_prob=0.0)
+    zeros = np.zeros((4, 3))
+    c.observe(1, shape_ids=np.zeros(4), obj_pos=zeros, obj_quat_wxyz=np.tile(yaw_quat(0.0), (4, 1)),
+              lift_frac=np.zeros(4), reward=np.zeros(4), reward_terms={}, contact_left_local=zeros,
+              contact_right_local=zeros, grasp_center_local=zeros, grasp_width=np.zeros(4),
+              skip=np.array([True, True, False, True]))
+    assert c.queue_size == 1
+
+
+def test_impossible_failure_keys_from_verdicts(tmp_path):
+    from training.demo_replay import impossible_cases, impossible_failure_keys
+
+    c = make_curator(tmp_path, num_envs=1, replay_prob=1.0, fail_threshold=4)
+    (case_id,) = run(c, FakeEnv(1), 40, lambda s, r: 0.0 if s == 0 else 1.0)[:1]
+    vdir = tmp_path / "run1" / "verdicts"
+    vdir.mkdir()
+    (vdir / f"{case_id}.json").write_text(json.dumps({"verdict": "impossible"}))
+    assert impossible_cases(tmp_path) == {("run1", case_id)}
+    case = json.loads((tmp_path / "run1/cases" / f"{case_id}.json").read_text())
+    assert impossible_failure_keys(tmp_path) == {("torus", case["failure_key"]["yaw_bin"])}
+    (vdir / f"{case_id}.json").write_text(json.dumps({"verdict": "feasible"}))
+    assert impossible_failure_keys(tmp_path) == set()
+
+
+def test_one_case_per_failure_key(tmp_path):
+    def count(**cfg):
+        c = make_curator(tmp_path / str(cfg), num_envs=4, replay_prob=1.0, fail_threshold=1, **cfg)
+        cases = run(c, FakeEnv(4, seed=3), 60, lambda s, r: 0.0 if s == 0 else 1.0)
+        keys = [json.loads((c.cases_dir / f"{k}.json").read_text())["failure_key"]["yaw_bin"] for k in cases]
+        return len(cases), len(set(keys)), c.stats["skipped_duplicate"]
+
+    n, distinct, skipped = count()
+    assert n == distinct and skipped > 0
+    n_all, _, _ = count(one_case_per_key=False)
+    assert n_all > n
