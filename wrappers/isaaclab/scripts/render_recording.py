@@ -43,6 +43,10 @@ parser.add_argument("--fov", type=float, default=45.0)
 parser.add_argument("--no_grasp_overlay", dest="show_grasp", action="store_false",
                     help="Hide the on-image markers for the predicted grasp contacts.")
 parser.add_argument("--hold_s", type=float, default=1.2, help="Seconds to hold the result card.")
+parser.add_argument("--episodes", type=int, nargs="+", default=None,
+                    help="Render only these episodes (1-based, as numbered in the play log).")
+parser.add_argument("--title", type=str, default=None,
+                    help="Extra first overlay line, e.g. which policy this is.")
 args = parser.parse_args()
 
 
@@ -196,7 +200,7 @@ def main():
     for ep_idx in range(len(episodes)):
         ep = episodes[ep_idx]
         steps = np.nonzero(step_ep == ep_idx)[0]
-        if len(steps) == 0:
+        if len(steps) == 0 or (args.episodes and ep_idx + 1 not in args.episodes):
             continue
         # Swap in this episode's object, contact markers, and lift-target plate.
         for name in ("object", "c0", "c1", "goal"):
@@ -240,7 +244,8 @@ def main():
                 draw_grasp(d, project(r, pts, args.width, args.height), marker_colors, f_small, arrow)
             gain = max(0.0, float(obj_pose[si, 2]) - ep["spawn_z"])
             peak = max(peak, gain)
-            lines = [f"Episode {ep_idx + 1}/{len(episodes)}   object: {ep['shape']}",
+            lines = ([args.title] if args.title else []) + [
+                     f"Episode {ep_idx + 1}/{len(episodes)}   object: {ep['shape']}",
                      f"Phase: {phase_of(int(step_exec[si]))}",
                      f"Object lift: {100 * gain:4.1f} cm   peak {100 * peak:4.1f}   (target {100 * lift_target:.0f} cm)"]
             if args.show_grasp:
