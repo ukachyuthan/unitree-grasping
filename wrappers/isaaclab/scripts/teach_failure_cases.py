@@ -36,12 +36,24 @@ mode = parser.add_mutually_exclusive_group(required=True)
 mode.add_argument("--cases", type=str, help="A failure dataset run dir (<vr_failures>/<run>) to label.")
 mode.add_argument("--random_cases", type=int, help="Label this many random (object, pose) cases instead.")
 mode.add_argument("--verify", type=str, help="Demo root to verify: execute each demo, write verify.json.")
+mode.add_argument("--transfer", type=str,
+                  help="Demo root: try each demo's grasp points on the same object in --poses random "
+                       "3-D orientations (held in place until the lift, as if propped); every pose "
+                       "where they lift is written to --out as a pose-transfer demo.")
 mode.add_argument("--eval_cases", type=str,
                   help="A failure dataset run dir: run --checkpoint's policy (action mean) on each "
                        "case, --repeats times, and report its success on those cases.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Policy for --eval_cases.")
 parser.add_argument("--psi_grid", type=float, nargs="*", default=[],
                     help="--verify: also try each demo's contacts at these approach angles (deg).")
+parser.add_argument("--record", type=str, default=None,
+                    help="--verify: record the first --limit demos (own approach) to this .npz "
+                         "for scripts/render_recording.py, instead of the batched check.")
+parser.add_argument("--limit", type=int, default=6, help="--record: demos to record.")
+parser.add_argument("--poses", type=int, default=16, help="--transfer: random orientations per demo.")
+parser.add_argument("--variants", action="store_true",
+                    help="--transfer: also carry each demo's points to the other variants of its "
+                         "object family (rescaled and snapped onto each variant's surface).")
 parser.add_argument("--repeats", type=int, default=3,
                     help="--eval_cases: attempts per case (the observation noise differs each time).")
 parser.add_argument("--exec_noise", action="store_true",
@@ -55,8 +67,8 @@ parser.add_argument("--num_envs", type=int, default=64)
 parser.add_argument("--seed", type=int, default=0)
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
-if (args.cases or args.random_cases) and not args.out:
-    parser.error("--out is required with --cases / --random_cases")
+if (args.cases or args.random_cases or args.transfer) and not args.out:
+    parser.error("--out is required with --cases / --random_cases / --transfer")
 if args.eval_cases and not args.checkpoint:
     parser.error("--eval_cases needs --checkpoint")
 
@@ -83,7 +95,7 @@ from envs.grasp_pose_env import GraspPoseEnv
 from models.grasp_pose_actor_critic import GraspPoseActorCritic
 from envs._object_registry import shape_asset
 from training.demo_replay import (
-    DEMO_SCHEMA, SOURCE_TEACHER, impossible_cases, load_demos, psi_from_approach, quat_rotate_wxyz,
+    DEMO_SCHEMA, SOURCE_TEACHER, SOURCE_TRANSFER, impossible_cases, load_demos, psi_from_approach, quat_rotate_wxyz,
 )
 
 
@@ -171,6 +183,152 @@ def run_jobs(env: GraspPoseEnv, jobs: list[dict], shape_index: dict, policy=None
     return results
 
 
+def record_demos(env: GraspPoseEnv, demos, shape_index: dict):
+    """Execute demos one at a time in env 0, recording every physics step
+    (as play_grasp_pose.py --record does), for a visual check."""
+    from state_recorder import StateRecorder
+
+    rec = StateRecorder(env)
+    B = env.num_envs
+    zero = torch.zeros(B, int(env.cfg.action_space), device=env.device)
+    for d in demos:
+        env.queue_replays(env_ids=[0], shape_ids=[shape_index[d.shape]],
+                          xy=np.array([d.pos[:2]], dtype=np.float32),
+                          quat_wxyz=np.array([d.quat_wxyz], dtype=np.float32))
+        env.step(zero)                                    # its resets spawn the demo's case
+        c1 = torch.zeros(B, 3, device=env.device)
+        c2 = torch.zeros(B, 3, device=env.device)
+        c1[0] = torch.tensor(d.c1_local, dtype=torch.float32, device=env.device)
+        c2[0] = torch.tensor(d.c2_local, dtype=torch.float32, device=env.device)
+        env._pre_physics_step(env.encode_six_dof_action(c1, c2, torch.full((B,), float(d.psi), device=env.device)))
+        rec.begin_episode(d.shape)
+        for _ in range(env.cfg.decimation):
+            env._apply_action()
+            env.scene.write_data_to_sim()
+            env.sim.step(render=False)
+            env.scene.update(dt=env.physics_dt)
+            rec.capture()
+        env._get_rewards()
+        rec.end_episode()
+        print(f"  {d.case_id[:60]:60s} lifted={bool(env._last_lift_success[0])}", flush=True)
+        env._reset_idx(torch.arange(B, device=env.device))
+    rec.save(args.record)
+    print(f"[teach] recorded {len(demos)} demos → {args.record}")
+
+
+def random_quats(n: int, rng) -> np.ndarray:
+    """n orientations uniform over SO(3) (Shoemake), as wxyz."""
+    u1, u2, u3 = rng.random((3, n))
+    a, b = np.sqrt(1 - u1), np.sqrt(u1)
+    x, y = a * np.sin(2 * np.pi * u2), a * np.cos(2 * np.pi * u2)
+    z, w = b * np.sin(2 * np.pi * u3), b * np.cos(2 * np.pi * u3)
+    return np.stack([w, x, y, z], axis=1)
+
+
+DEFAULT_PSI_GRID = [-80, -60, -40, -20, 0, 20, 40, 60, 80]
+
+
+def _mesh(shape: str, scale: float):
+    import trimesh
+    m = trimesh.load(shape_asset(shape, ".obj"), force="mesh")
+    m.apply_scale(scale)
+    return m
+
+
+def map_points_to_variant(points: np.ndarray, src, dst) -> np.ndarray:
+    """Carry object-local points from mesh src to its variant dst: rescale with
+    the bounding boxes (variants are stretched / deformed copies in the same
+    frame), then snap onto dst's surface."""
+    import trimesh
+    s_lo, s_hi = src.bounds
+    d_lo, d_hi = dst.bounds
+    rel = (points - s_lo) / np.maximum(s_hi - s_lo, 1e-9)
+    return trimesh.proximity.closest_point(dst, d_lo + rel * (d_hi - d_lo))[0]
+
+
+def transfer_poses(env: GraspPoseEnv, demos, shape_index: dict, rng):
+    """Each demo's grasp points on the same object in random 3-D orientations
+    (and, with --variants, on every other variant of the object's family).
+
+    The object is spawned at the orientation, settled until it touches the
+    table, and held there until the fingers close (as every episode is), then
+    must be carried by the grasp alone. The approach is not part of the demo,
+    so each pose is tried over a grid of approach angles; a pose counts if any
+    lifts. Lifting poses are written as pose-transfer demos.
+    """
+    from envs._object_registry import split_variant
+
+    demos = [d for d in demos if d.shape in shape_index]
+    scale = float(env.cfg.object_scale)
+    meshes = {}
+
+    def mesh(shape):
+        if shape not in meshes:
+            meshes[shape] = _mesh(shape, scale)
+        return meshes[shape]
+
+    # (demo, target shape, c1, c2) to try.
+    sources = []
+    for d in demos:
+        sources.append((d, d.shape, np.asarray(d.c1_local), np.asarray(d.c2_local)))
+        if args.variants:
+            family = split_variant(d.shape)[0]
+            for target in shape_index:
+                if target != d.shape and split_variant(target)[0] == family:
+                    c = map_points_to_variant(np.stack([d.c1_local, d.c2_local]), mesh(d.shape), mesh(target))
+                    sources.append((d, target, c[0], c[1]))
+
+    psis = [math.radians(p) for p in (args.psi_grid or DEFAULT_PSI_GRID)]
+    P, K = len(psis), args.poses
+    poses = [random_quats(K, rng) for _ in sources]
+    jobs = [{"shape": t, "pos": d.pos, "quat_wxyz": q, "c1": c1, "c2": c2, "psi": p}
+            for (d, t, c1, c2), qs in zip(sources, poses) for q in qs for p in psis]
+    print(f"[teach] transfer: {len(demos)} demos → {len(sources)} (demo, shape) pairs × {K} poses × "
+          f"{P} approaches = {len(jobs)} runs")
+    ok = run_jobs(env, jobs, shape_index)
+
+    out_root = Path(args.out)
+    summary, n_written = {}, 0
+    for i, (d, target, c1, c2) in enumerate(sources):
+        lifted_poses = []
+        for k in range(K):
+            res = ok[(i * K + k) * P : (i * K + k + 1) * P]
+            if not any(res):
+                continue
+            q = poses[i][k]
+            psi = psis[res.index(True)]
+            case_id = f"{d.case_id}__{target}__pose{k:02d}" if target != d.shape else f"{d.case_id}__pose{k:02d}"
+            out = out_root / d.run / "demos" / case_id
+            out.mkdir(parents=True, exist_ok=True)
+            (out / f"{SOURCE_TRANSFER}.json").write_text(json.dumps({
+                "schema": DEMO_SCHEMA, "run": d.run, "case_id": case_id, "shape": target,
+                "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "source": SOURCE_TRANSFER, "success": True,
+                "frame": "robot_base: z-up, metres, quaternions wxyz; grasp contacts object-local (scaled)",
+                "grasp": {"t": 0.0, "hand": "franka", "mode": "parallel-jaw",
+                          "c1_local": [round(float(v), 6) for v in c1],
+                          "c2_local": [round(float(v), 6) for v in c2],
+                          "psi_rad": round(psi, 6),
+                          "object_pose": {"pos": [float(d.pos[0]), float(d.pos[1]), 0.0],
+                                          "quat_wxyz": [round(float(v), 6) for v in q]}},
+                "transfer": {"from": d.path, "from_source": d.source, "from_shape": d.shape,
+                             "pose_index": k,
+                             "lifted_psi_deg": [round(math.degrees(p)) for p, s in zip(psis, res) if s]},
+            }, indent=1))
+            lifted_poses.append(k)
+            n_written += 1
+        summary.setdefault(d.path, {"case_id": d.case_id, "shape": d.shape, "targets": {}})
+        summary[d.path]["targets"][target] = lifted_poses
+    out_root.mkdir(parents=True, exist_ok=True)
+    (out_root / "transfer_summary.json").write_text(json.dumps(
+        {"poses_per_target": K, "variants": bool(args.variants),
+         "psi_grid_deg": [round(math.degrees(p)) for p in psis], "demos": summary}, indent=1))
+    n_any = sum(1 for v in summary.values() if any(v["targets"].values()))
+    cases_any = len({v["case_id"] for v in summary.values() if any(v["targets"].values())})
+    print(f"[teach] transfer: {n_written} lifting (shape, pose) cases from {len(sources) * K} tried; "
+          f"{n_any}/{len(demos)} demos lift somewhere; {cases_any} failure cases covered → {out_root}")
+
+
 def write_demo(out_root: Path, case: dict, g: dict, tried: int, lifted: list[int]):
     d = out_root / case["run"] / "demos" / case["case_id"]
     d.mkdir(parents=True, exist_ok=True)
@@ -210,9 +368,15 @@ def main():
         cfg.six_dof_exec_noise_pos_m = defaults.six_dof_exec_noise_pos_m
         cfg.six_dof_exec_noise_rot_rad = defaults.six_dof_exec_noise_rot_rad
 
-    if args.verify:
-        demos = load_demos(args.verify)
-        cfg.shape_filter = tuple(sorted({d.shape for d in demos}))
+    if args.verify or args.transfer:
+        demos = load_demos(args.verify or args.transfer)
+        if args.transfer:
+            demos = [d for d in demos if d.source != SOURCE_TRANSFER]
+        if args.transfer and args.variants:        # whole families: every variant is a target
+            from envs._object_registry import split_variant
+            cfg.shape_filter = tuple(sorted({split_variant(d.shape)[0] for d in demos}))
+        else:
+            cfg.shape_filter = tuple(sorted({d.shape for d in demos}))
     elif args.cases:
         cases = load_cases(Path(args.cases))
         cfg.shape_filter = tuple(sorted({c["shape"] for c in cases}))
@@ -227,6 +391,14 @@ def main():
     env.seed(args.seed)
     env.reset()
     shape_index = {s: i for i, s in enumerate(env._shape_names)}
+
+    if args.transfer:
+        transfer_poses(env, demos, shape_index, rng)
+        return
+
+    if args.verify and args.record:
+        record_demos(env, [d for d in demos if d.shape in shape_index][: args.limit], shape_index)
+        return
 
     if args.verify:
         demos = [d for d in demos if d.shape in shape_index]

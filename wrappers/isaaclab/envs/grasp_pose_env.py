@@ -32,6 +32,7 @@ from isaaclab.utils.math import (
     skew_symmetric_matrix,
     quat_from_angle_axis,
     quat_mul,
+    quat_apply,
 )
 from isaaclab.controllers.differential_ik import DifferentialIKController
 from isaaclab.controllers.differential_ik_cfg import DifferentialIKControllerCfg
@@ -50,7 +51,7 @@ from envs.grasp_pose_env_cfg import (
     N_FLOAT_SETTLE, FLOATING_EXEC_STEPS, FLOATING_HAND_CFG, FLOATING_HAND_JOINTS,
 )
 from grasping.pointcloud_utils import add_sensor_noise
-from envs.six_dof_geometry import approach_from_jaw, euler_zyx_from_matrix
+from envs.six_dof_geometry import approach_from_jaw, euler_zyx_from_matrix, random_orientation
 
 
 def _smoothstep(t: float) -> float:
@@ -550,6 +551,13 @@ class GraspPoseEnv(DirectRLEnv):
             quat = torch.zeros(n, 4, device=self.device)
             quat[:, 0] = half.cos()
             quat[:, 3] = half.sin()
+            # Some episodes start in an arbitrary 3-D orientation instead of flat:
+            # settled until it touches the table and held there (as every object
+            # is) until the fingers close, as if propped.
+            if self.cfg.tilted_spawn_prob > 0.0:
+                tilt = torch.rand(n, device=self.device) < self.cfg.tilted_spawn_prob
+                if tilt.any():
+                    quat[tilt] = random_orientation(int(tilt.sum()), device=self.device)
         else:
             cx = 0.5 * sum(self.cfg.spawn_x_range)
             cy = 0.5 * sum(self.cfg.spawn_y_range)
@@ -568,7 +576,13 @@ class GraspPoseEnv(DirectRLEnv):
             quat[replay] = self._replay_quat[ids]
             self._replay_pending[ids] = False
 
-        spawn_z = torch.full((n,), self.cfg.table_surface_z + self.cfg.spawn_z_offset, device=self.device)
+        # Start just above the table at this orientation: a tilted long object
+        # spawned at the flat height would start deep in the table and be flung
+        # out by depenetration. The flat default stays the minimum.
+        pc = self._obj_pcs[self._env_shape[env_ids]]                          # (n, P, 3) local
+        lowest = quat_apply(quat.unsqueeze(1).expand(-1, pc.shape[1], -1), pc)[..., 2].min(dim=1).values
+        spawn_z = torch.clamp(self.cfg.table_surface_z - lowest + 0.005,
+                              min=self.cfg.table_surface_z + self.cfg.spawn_z_offset)
         self._spawn_z[env_ids] = spawn_z   # record for reward computation
 
         # Park every shape underground, each in its own grid cell (stacked at one

@@ -42,3 +42,12 @@ def euler_zyx_from_matrix(R: torch.Tensor) -> torch.Tensor:
     a = torch.where(gimbal, torch.zeros_like(b), torch.atan2(R[:, 1, 0], R[:, 0, 0]))
     c = torch.where(gimbal, torch.atan2(sb * R[:, 0, 1], R[:, 1, 1]), torch.atan2(R[:, 2, 1], R[:, 2, 2]))
     return torch.stack([a, b, c], dim=-1)
+
+
+def random_orientation(n: int, device=None, generator: torch.Generator | None = None) -> torch.Tensor:
+    """(n, 4) unit quaternions (wxyz) uniform over SO(3) (Shoemake's method)."""
+    u1, u2, u3 = torch.rand(3, n, device=device, generator=generator)
+    a, b = (1 - u1).sqrt(), u1.sqrt()
+    two_pi = 2 * torch.pi
+    return torch.stack([b * torch.cos(two_pi * u3), a * torch.sin(two_pi * u2),
+                        a * torch.cos(two_pi * u2), b * torch.sin(two_pi * u3)], dim=-1)

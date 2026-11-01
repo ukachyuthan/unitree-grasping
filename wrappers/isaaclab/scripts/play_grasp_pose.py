@@ -75,6 +75,9 @@ parser.add_argument("--grasp_mode", type=str, default="six_dof", choices=["six_d
                          "top_down: the earlier vertical-palm contact-pair mode (6-D).")
 parser.add_argument("--eval_objects", action="store_true",
                     help="Use only the held-out YCB eval objects (data/objects/eval), never seen in training.")
+parser.add_argument("--tilted_spawn_prob", type=float, default=0.0,
+                    help="Fraction of episodes in an arbitrary 3-D orientation (held until the "
+                         "fingers close) instead of flat. 1.0 evaluates tilted poses only.")
 parser.add_argument("--shapes", type=str, nargs="+", default=None,
                     help="Only objects whose name contains one of these substrings (e.g. marker knife).")
 parser.add_argument("--debug_rank", type=int, default=0,
@@ -463,6 +466,7 @@ def main():
     env_cfg.sim.device = device
     env_cfg.use_real_objects = args.use_real_objects
     env_cfg.variants_per_family = args.variants_per_family
+    env_cfg.tilted_spawn_prob = args.tilted_spawn_prob
     env_cfg.eval_object_mode = args.eval_objects
     if args.shapes:
         env_cfg.shape_filter = tuple(args.shapes)

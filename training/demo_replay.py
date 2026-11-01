@@ -41,6 +41,9 @@ import numpy as np
 DEMO_SCHEMA = "unitree-grasp-demo/v1"
 SOURCE_VR = "webxr-hands"
 SOURCE_TEACHER = "sim-teacher"
+# A human demo's grasp points moved to another orientation of the same object,
+# kept only where they lift in simulation (teach_failure_cases.py --transfer).
+SOURCE_TRANSFER = "pose-transfer"
 
 
 @dataclass

@@ -98,6 +98,11 @@ parser.add_argument("--demo_replay_prob", type=float, default=0.1,
                     help="Per env per step: chance the next episode replays a demo case.")
 parser.add_argument("--bc_coef", type=float, default=1.0,
                     help="Weight of the imitation loss on demo episodes.")
+parser.add_argument("--bc_psi", action="store_true",
+                    help="Also imitate the demo's approach angle (default: contact points only).")
+parser.add_argument("--tilted_spawn_prob", type=float, default=0.0,
+                    help="Fraction of episodes spawned in an arbitrary 3-D orientation (held as if "
+                         "propped until the fingers close) instead of flat on the table.")
 parser.add_argument("--render_interval", type=int, default=None,
                     help="Physics steps between viewport redraws when running with the GUI "
                          "(no --headless). Default renders once per grasp attempt, which shows "
@@ -247,14 +252,17 @@ def _demo_targets(u, demos: DemoReplayer, device):
     return tgt, mask
 
 
-def demo_imitation_loss(mean, tgt, mask):
+def demo_imitation_loss(mean, tgt, mask, with_psi=False):
     """Mean distance from the policy's action mean to the demo action, taking the
-    closer finger order (c1↔c2 with ψ→−ψ is the same grasp)."""
+    closer finger order (c1↔c2 with ψ→−ψ is the same grasp). By default only the
+    two contact points are imitated: the demo says where to grasp, and RL keeps
+    choosing the approach."""
     if not mask.any():
         return mean.new_zeros(())
     m, t = mean[mask], tgt[mask]
     swap = torch.cat([t[:, 3:6], t[:, 0:3], -t[:, 6:7]], dim=-1)
-    return torch.minimum((m - t).norm(dim=-1), (m - swap).norm(dim=-1)).mean()
+    k = t.shape[-1] if with_psi else 6
+    return torch.minimum((m - t)[:, :k].norm(dim=-1), (m - swap)[:, :k].norm(dim=-1)).mean()
 
 
 def ppo_update(ac, optimizer, obs, actions, old_logp, returns, advantages,
@@ -274,7 +282,7 @@ def ppo_update(ac, optimizer, obs, actions, old_logp, returns, advantages,
     loss = policy_loss + value_coef * value_loss - entropy_coef * entropy
     bc_loss = torch.zeros((), device=obs.device)
     if demo_mask is not None and bc_coef > 0.0:
-        bc_loss = demo_imitation_loss(ac.action_mean, demo_tgt, demo_mask)
+        bc_loss = demo_imitation_loss(ac.action_mean, demo_tgt, demo_mask, with_psi=args.bc_psi)
         loss = loss + bc_coef * bc_loss
 
     optimizer.zero_grad()
@@ -535,6 +543,7 @@ def main():
     env_cfg.sim.device = device
     env_cfg.use_real_objects = args.use_real_objects
     env_cfg.variants_per_family = args.variants_per_family
+    env_cfg.tilted_spawn_prob = args.tilted_spawn_prob
     env_cfg.grasp_mode = args.grasp_mode
     env_cfg.six_dof_executor = args.executor
     env_cfg.obs_frame = args.obs_frame

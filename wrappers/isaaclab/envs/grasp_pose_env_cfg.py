@@ -326,6 +326,9 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
     spawn_yaw_range: tuple = (-math.pi, math.pi)
     randomize_object_spawn: bool = True
     spawn_z_offset: float  = 0.04
+    # Fraction of random spawns in an arbitrary 3-D orientation (held until the
+    # fingers close, as if propped) instead of flat on the table.
+    tilted_spawn_prob: float = 0.0
     settle_steps: int      = 30
 
     # ── Approach / lift execution ─────────────────────────────────────────────

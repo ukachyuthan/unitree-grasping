@@ -101,3 +101,15 @@ def test_pretrain_psi_inverts_env_approach():
     psi = (torch.rand(300, generator=g) * 2 - 1) * (math.pi / 2)
     a = approach_from_jaw(u, psi, radial_for(300))
     assert (psi_of(c1, c2, a) - psi)[keep].abs().max() < 1e-4
+
+
+def test_random_orientation_is_unit_and_uniform():
+    from envs.six_dof_geometry import random_orientation
+
+    q = random_orientation(20000, generator=torch.Generator().manual_seed(3))
+    assert torch.allclose(q.norm(dim=-1), torch.ones(len(q)), atol=1e-5)
+    # Uniform on SO(3): the rotated +z axis is uniform on the sphere, so its z has mean 0
+    # and E[z^2] = 1/3.
+    w, x, y, z = q.unbind(-1)
+    rz = 1 - 2 * (x * x + y * y)                       # z-component of R @ [0, 0, 1]
+    assert rz.mean().abs() < 0.02 and (rz.pow(2).mean() - 1 / 3).abs() < 0.02
