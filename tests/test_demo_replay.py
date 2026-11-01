@@ -105,3 +105,33 @@ def test_replayer_plans_and_returns_targets(tmp_path):
     ids, c1, c2, psi = rep.take_started()
     assert list(ids) == plan["env_ids"] and c1.shape == (len(ids), 3) and psi.shape == (len(ids),)
     assert len(rep.take_started()[0]) == 0       # consumed
+
+
+def test_recover_grasp_from_frames_at_grip_time(tmp_path):
+    from training.demo_replay import recover_grasp
+
+    names = ["wrist", "thumb-tip", "index-finger-tip"]
+    pose = {"pos": [0.5, 0.0, 0.1], "quat_wxyz": yaw_quat(math.pi / 2)}   # carried, turned 90°
+
+    def frame(t, thumb_w, index_w):
+        return {"t": t, "object": pose, "held": True,
+                "hands": {"right": {"joints": [0.4, 0.0, 0.3] + thumb_w + index_w, "wrist_quat_wxyz": [1, 0, 0, 0]},
+                          "left": None}}
+
+    # World +y at the object is object-local +x (object yawed 90°).
+    demo = {"schema": "unitree-grasp-demo/v1", "run": "r", "case_id": "c", "shape": "cube",
+            "source": SOURCE_VR, "success": True, "grasp": None, "joint_names": names,
+            "events": [{"t": 1.0, "type": "grasp", "detail": "right:opposed:index"},
+                       {"t": 2.0, "type": "success"}],
+            "frames": [frame(1.0, [0.5, -0.02, 0.1], [0.5, 0.02, 0.1]),
+                       frame(2.0, [0.5, -0.05, 0.1], [0.5, 0.05, 0.1])]}   # fingers shifted while carrying
+    g = recover_grasp(demo)
+    assert np.allclose(g["c1_local"], [-0.02, 0, 0], atol=1e-9)      # grip-time frame, not success-time
+    assert np.allclose(g["c2_local"], [0.02, 0, 0], atol=1e-9)
+    assert g["hand"] == "right" and g["finger"] == "index"
+    snapped = recover_grasp(demo, closest=lambda p: p * 0.5)
+    assert np.allclose(snapped["c2_local"], [0.01, 0, 0], atol=1e-9)
+
+    write(tmp_path / "r/demos/c/d.json", demo)
+    (d,) = load_demos(tmp_path)
+    assert np.allclose(d.c1_local, [-0.02, 0, 0], atol=1e-9)

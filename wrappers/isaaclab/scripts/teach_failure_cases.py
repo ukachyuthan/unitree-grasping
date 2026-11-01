@@ -40,6 +40,8 @@ mode.add_argument("--eval_cases", type=str,
                   help="A failure dataset run dir: run --checkpoint's policy (action mean) on each "
                        "case, --repeats times, and report its success on those cases.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Policy for --eval_cases.")
+parser.add_argument("--psi_grid", type=float, nargs="*", default=[],
+                    help="--verify: also try each demo's contacts at these approach angles (deg).")
 parser.add_argument("--repeats", type=int, default=3,
                     help="--eval_cases: attempts per case (the observation noise differs each time).")
 parser.add_argument("--exec_noise", action="store_true",
@@ -228,18 +230,28 @@ def main():
 
     if args.verify:
         demos = [d for d in demos if d.shape in shape_index]
+        # The demo's own approach first, then (with --psi_grid) the same contacts
+        # at other approach angles: separates "where to grasp" from "from where".
+        psis = [None] + [math.radians(p) for p in args.psi_grid]
         jobs = [{"shape": d.shape, "pos": d.pos, "quat_wxyz": d.quat_wxyz,
-                 "c1": d.c1_local, "c2": d.c2_local, "psi": d.psi} for d in demos]
+                 "c1": d.c1_local, "c2": d.c2_local, "psi": d.psi if p is None else p}
+                for d in demos for p in psis]
         ok = run_jobs(env, jobs, shape_index)
-        report = {d.path: bool(s) for d, s in zip(demos, ok)}
-        by_source = {}
-        for d, s in zip(demos, ok):
-            n, k = by_source.get(d.source, (0, 0))
-            by_source[d.source] = (n + 1, k + int(s))
+        P = len(psis)
+        report, by_source = {}, {}
+        for i, d in enumerate(demos):
+            res = ok[i * P : (i + 1) * P]
+            lifted_at = [round(math.degrees(p)) for p, s in zip(psis[1:], res[1:]) if s]
+            report[d.path] = {"own_psi_deg": round(math.degrees(d.psi)), "lifted": bool(res[0]),
+                              "lifted_any_psi": bool(res[0]) or bool(lifted_at), "grid_psi_lifted": lifted_at}
+            n, k, a = by_source.get(d.source, (0, 0, 0))
+            by_source[d.source] = (n + 1, k + int(res[0]), a + int(report[d.path]["lifted_any_psi"]))
         path = Path(args.verify) / "verify.json"
-        path.write_text(json.dumps({"by_source": by_source, "demos": report}, indent=1))
-        for src, (n, k) in by_source.items():
-            print(f"[teach] verify {src}: {k}/{n} demos lift with the Franka hand")
+        path.write_text(json.dumps({"psi_grid_deg": args.psi_grid, "by_source": by_source,
+                                    "demos": report}, indent=1))
+        for src, (n, k, a) in by_source.items():
+            print(f"[teach] verify {src}: {k}/{n} demos lift with the Franka hand at their own approach"
+                  + (f"; {a}/{n} at some approach in the grid" if args.psi_grid else ""))
         print(f"[teach] → {path}")
         return
 

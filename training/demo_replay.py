@@ -102,7 +102,72 @@ def quat_conj_wxyz(q: np.ndarray) -> np.ndarray:
     return np.array([q[0], -q[1], -q[2], -q[3]])
 
 
-def demo_from_json(demo: dict, path: str, case_pose: dict | None = None) -> GraspDemo | None:
+_FINGER_TIP = {"thumb": "thumb-tip", "index": "index-finger-tip", "middle": "middle-finger-tip",
+               "ring": "ring-finger-tip", "pinky": "pinky-finger-tip"}
+
+
+def recover_grasp(demo: dict, closest=None) -> dict | None:
+    """Rebuild the grasp of a successful VR demo saved without one.
+
+    Early versions of the VR app saved the live grasp, which was gone if the
+    object fell off the table and respawned before the save. The recording still
+    has the grasp event ("hand:mode:finger") and every frame's hand joints and
+    object pose, so the contacts are the thumb tip and the opposing fingertip,
+    in the object's frame, at the frame of the grasp that led to success —
+    which is when the app records contacts; fingers shift while carrying.
+
+    closest: optional (n, 3) → (n, 3) nearest object-surface points (object
+    frame). The app saves surface points, and fingertip joints sit ~1 cm
+    inside the finger; with it, recovered contacts match saved ones to ~1 mm
+    (checked on demos that have both), without it to ~15 mm."""
+    events = demo.get("events") or []
+    grasp_ev = [e for e in events if e.get("type") == "grasp" and e.get("detail")]
+    success_ev = [e for e in events if e.get("type") == "success"]
+    names = demo.get("joint_names") or []
+    if not grasp_ev or not success_ev or "thumb-tip" not in names:
+        return None
+    before = [e for e in grasp_ev if e["t"] <= success_ev[-1]["t"]] or grasp_ev
+    t = before[-1]["t"]
+    hand, mode, finger = before[-1]["detail"].split(":")
+    if _FINGER_TIP.get(finger) not in names:
+        return None
+    frames = [f for f in demo.get("frames", []) if (f.get("hands") or {}).get(hand)]
+    if not frames:
+        return None
+    f = min(frames, key=lambda fr: abs(fr["t"] - t))
+    j = np.asarray(f["hands"][hand]["joints"], dtype=np.float64).reshape(-1, 3)
+    pose = f["object"]
+    pos = np.asarray(pose["pos"], dtype=np.float64)
+    q_inv = quat_conj_wxyz(np.asarray(pose["quat_wxyz"], dtype=np.float64))
+
+    def local(name):
+        return quat_rotate_wxyz(q_inv, j[names.index(name)] - pos)
+
+    c = np.stack([local("thumb-tip"), local(_FINGER_TIP[finger])])
+    if closest is not None:
+        c = np.asarray(closest(c), dtype=np.float64)
+    return {"t": f["t"], "hand": hand, "mode": mode, "finger": finger,
+            "c1_local": c[0].tolist(), "c2_local": c[1].tolist(),
+            "object_pose": pose, "recovered_from_frames": True}
+
+
+def mesh_closest_fn(run_dir: Path, case: dict):
+    """Nearest-surface-point function on a case's mesh (scaled, object frame),
+    or None when the mesh or trimesh is unavailable."""
+    mesh_rel = (case.get("object") or {}).get("mesh")
+    if not mesh_rel or not (Path(run_dir) / mesh_rel).exists():
+        return None
+    try:
+        import trimesh
+    except ImportError:
+        return None
+    m = trimesh.load(Path(run_dir) / mesh_rel, force="mesh")
+    m.apply_scale(float(case["object"].get("mesh_scale", 1.0)))
+    return lambda pts: trimesh.proximity.closest_point(m, pts)[0]
+
+
+def demo_from_json(demo: dict, path: str, case_pose: dict | None = None,
+                   closest=None) -> GraspDemo | None:
     """One demo file → GraspDemo, or None if it is unusable (failed, no grasp,
     no approach for a VR demo).
 
@@ -112,6 +177,10 @@ def demo_from_json(demo: dict, path: str, case_pose: dict | None = None) -> Gras
     if demo.get("schema") != DEMO_SCHEMA or not demo.get("success"):
         return None
     g = demo.get("grasp")
+    if not g and demo.get("source", SOURCE_VR) == SOURCE_VR:
+        g = recover_grasp(demo, closest)
+        if g:
+            demo = {**demo, "grasp": g}      # vr_approach_world reads it from the demo
     if not g:
         return None
     pose = case_pose or g["object_pose"]
@@ -146,11 +215,14 @@ def load_demos(roots, sources: tuple[str, ...] | None = None) -> list[GraspDemo]
                 raw = json.load(f)
             # <run>/demos/<case_id>/x.json → <run>/cases/<case_id>.json (VR dataset layout)
             case_path = path.parents[2] / "cases" / f"{path.parent.name}.json"
-            case_pose = None
+            case_pose = closest = None
             if case_path.exists():
                 with open(case_path, encoding="utf-8") as f:
-                    case_pose = json.load(f).get("object_pose")
-            d = demo_from_json(raw, str(path), case_pose)
+                    case = json.load(f)
+                case_pose = case.get("object_pose")
+                if not raw.get("grasp"):        # needs rebuilding from the recording
+                    closest = mesh_closest_fn(path.parents[2], case)
+            d = demo_from_json(raw, str(path), case_pose, closest)
             if d is not None and (sources is None or d.source in sources):
                 out.append(d)
     return out
