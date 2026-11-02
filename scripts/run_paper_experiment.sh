@@ -24,7 +24,7 @@ RECIPE="--headless --num_envs 256 --max_iters $ITERS --resume $START --lr 1e-4 -
 HUMAN="../../data/pose_transfer ../../data/pose_transfer_variants ../../data/pt_human_flat"
 TEACHER="../../data/pt_teacher_tilted ../../data/pt_teacher_variants ../../data/pt_teacher_flat"
 DEMO_ARGS="--demo_replay_prob 0.2 --bc_coef 1"
-TRANSFER="--psi_grid -60 -30 0 30 60 --num_envs 256 --seed 1"
+TRANSFER="--headless --psi_grid -60 -30 0 30 60 --num_envs 256 --seed 1"
 
 evaluate() {   # evaluate <name> <checkpoint>
   local n=$1 c=$2
@@ -59,26 +59,39 @@ transfers() {
     --poses 8 --out ../../data/pt_teacher_variants $TRANSFER > $OUT/logs/transfer_teacher_variants.log 2>&1
   python scripts/teach_failure_cases.py --transfer ../../data/teacher_demos_top40 --variants --flat_poses \
     --poses 8 --out ../../data/pt_teacher_flat $TRANSFER > $OUT/logs/transfer_teacher_flat.log 2>&1
-  grep -h '^\[teach\] transfer:' $OUT/logs/transfer_*.log >> $OUT/progress.txt
+  # Every transfer must have produced demos, or B / C would silently train on
+  # fewer (or no) demos than intended.
+  for f in human_flat teacher_tilted teacher_variants teacher_flat; do
+    if ! grep -q '^\[teach\] transfer: [0-9]* lifting' $OUT/logs/transfer_$f.log; then
+      echo "$(date +%H:%M) TRANSFER FAILED: $f — B / C not started" >> $OUT/progress.txt
+      touch $OUT/transfers.failed
+      return
+    fi
+  done
+  grep -h '^\[teach\] transfer: [0-9]* lifting' $OUT/logs/transfer_*.log >> $OUT/progress.txt
   touch $OUT/transfers.done
 }
 
-wait_transfers() { until [ -f $OUT/transfers.done ]; do sleep 60; done; }
+wait_transfers() {
+  until [ -f $OUT/transfers.done ] || [ -f $OUT/transfers.failed ]; do sleep 60; done
+  [ -f $OUT/transfers.done ]
+}
 
 # Baseline and transfers first, alongside A seed 1.
-( evaluate start_policy $START; transfers ) &
+# (the start policy's evaluation is kept if a previous launch already measured it)
+( grep -q "eval start_policy:" $OUT/results.txt 2>/dev/null || evaluate start_policy $START; transfers ) &
 ( run A 1 ) &
 wait -n
 # Then the rest, two trainings at a time.
 JOBS=(
-  "wait_transfers; run B 1 --demos_dir $HUMAN $DEMO_ARGS"
-  "wait_transfers; run C 1 --demos_dir $TEACHER $DEMO_ARGS"
+  "wait_transfers && run B 1 --demos_dir $HUMAN $DEMO_ARGS"
+  "wait_transfers && run C 1 --demos_dir $TEACHER $DEMO_ARGS"
   "run A 2"
-  "wait_transfers; run B 2 --demos_dir $HUMAN $DEMO_ARGS"
-  "wait_transfers; run C 2 --demos_dir $TEACHER $DEMO_ARGS"
+  "wait_transfers && run B 2 --demos_dir $HUMAN $DEMO_ARGS"
+  "wait_transfers && run C 2 --demos_dir $TEACHER $DEMO_ARGS"
   "run A 3"
-  "wait_transfers; run B 3 --demos_dir $HUMAN $DEMO_ARGS"
-  "wait_transfers; run C 3 --demos_dir $TEACHER $DEMO_ARGS"
+  "wait_transfers && run B 3 --demos_dir $HUMAN $DEMO_ARGS"
+  "wait_transfers && run C 3 --demos_dir $TEACHER $DEMO_ARGS"
 )
 for j in "${JOBS[@]}"; do
   while [ "$(jobs -rp | wc -l)" -ge 2 ]; do wait -n; done
