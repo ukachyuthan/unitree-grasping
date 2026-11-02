@@ -53,6 +53,7 @@ parser.add_argument("--executor", type=str, default="floating", choices=["floati
 parser.add_argument("--entropy_coef", type=float, default=0.02,
                     help="PPO entropy bonus (exploration). Raise it if success plateaus while "
                          "entropy keeps falling.")
+parser.add_argument("--lr", type=float, default=3e-4, help="Adam learning rate.")
 parser.add_argument("--min_std", type=float, default=1e-4,
                     help="Floor on the policy's action noise (tanh action units).")
 parser.add_argument("--reset_std", type=float, default=None,
@@ -680,6 +681,7 @@ def main():
         env, ac, device, log_dir,
         max_iters=args.max_iters,
         entropy_coef=args.entropy_coef,
+        lr=args.lr,
         writer=writer,
         metrics_path=metrics_path,
         curator=curator,

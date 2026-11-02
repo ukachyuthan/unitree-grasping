@@ -51,6 +51,8 @@ parser.add_argument("--record", type=str, default=None,
                          "for scripts/render_recording.py, instead of the batched check.")
 parser.add_argument("--limit", type=int, default=6, help="--record: demos to record.")
 parser.add_argument("--poses", type=int, default=16, help="--transfer: random orientations per demo.")
+parser.add_argument("--flat_poses", action="store_true",
+                    help="--transfer: random headings flat on the table instead of random 3-D orientations.")
 parser.add_argument("--variants", action="store_true",
                     help="--transfer: also carry each demo's points to the other variants of its "
                          "object family (rescaled and snapped onto each variant's surface).")
@@ -280,7 +282,13 @@ def transfer_poses(env: GraspPoseEnv, demos, shape_index: dict, rng):
 
     psis = [math.radians(p) for p in (args.psi_grid or DEFAULT_PSI_GRID)]
     P, K = len(psis), args.poses
-    poses = [random_quats(K, rng) for _ in sources]
+    if args.flat_poses:
+        def flat(n):
+            yaw = rng.uniform(-math.pi, math.pi, n)
+            return np.stack([np.cos(yaw / 2), 0 * yaw, 0 * yaw, np.sin(yaw / 2)], axis=1)
+        poses = [flat(K) for _ in sources]
+    else:
+        poses = [random_quats(K, rng) for _ in sources]
     jobs = [{"shape": t, "pos": d.pos, "quat_wxyz": q, "c1": c1, "c2": c2, "psi": p}
             for (d, t, c1, c2), qs in zip(sources, poses) for q in qs for p in psis]
     print(f"[teach] transfer: {len(demos)} demos → {len(sources)} (demo, shape) pairs × {K} poses × "
