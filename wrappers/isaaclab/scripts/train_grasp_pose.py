@@ -99,6 +99,11 @@ parser.add_argument("--demo_replay_prob", type=float, default=0.1,
                     help="Per env per step: chance the next episode replays a demo case.")
 parser.add_argument("--bc_coef", type=float, default=1.0,
                     help="Weight of the imitation loss on demo episodes.")
+parser.add_argument("--demo_exec_prob", type=float, default=0.0,
+                    help="Fraction of demo episodes that execute the demo's own grasp instead of the "
+                         "policy's sample: the verified success enters the PPO batch like any "
+                         "episode, so RL reinforces the demo grasp directly (demo-augmented policy "
+                         "gradient), on top of the imitation loss.")
 parser.add_argument("--bc_psi", action="store_true",
                     help="Also imitate the demo's approach angle (default: contact points only).")
 parser.add_argument("--tilted_spawn_prob", type=float, default=0.0,
@@ -295,7 +300,7 @@ def ppo_update(ac, optimizer, obs, actions, old_logp, returns, advantages,
 
 
 def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=None,
-              curator=None, demos=None, bc_coef=1.0, lr=3e-4,
+              curator=None, demos=None, bc_coef=1.0, demo_exec_prob=0.0, lr=3e-4,
               num_steps_per_env=16, num_epochs=5, num_mini_batches=4,
               clip_param=0.2, value_coef=1.0, entropy_coef=0.02,
               max_grad_norm=1.0, save_interval=25):
@@ -311,7 +316,7 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
     for it in range(1, max_iters + 1):
         obs_buf, act_buf, logp_buf, rew_buf, val_buf = [], [], [], [], []
         success_buf = []   # per episode: object reached the lift target (env._last_lift_success)
-        demo_tgt_buf, demo_mask_buf = [], []
+        demo_tgt_buf, demo_mask_buf, exec_buf = [], [], []
 
         obs_td = env.get_observations()
         for _ in range(num_steps_per_env):
@@ -319,6 +324,11 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
             with torch.no_grad():
                 ac.act(obs)
                 actions = ac.distribution.sample()
+                # Some demo episodes execute the demo's own grasp; its log-probability
+                # under the current policy keeps the PPO ratio consistent.
+                exec_mask = demo_mask & (torch.rand(num_envs, device=device) < demo_exec_prob)
+                if exec_mask.any():
+                    actions = torch.where(exec_mask.unsqueeze(-1), demo_tgt, actions)
                 logp = ac.get_actions_log_prob(actions)
                 values = ac.evaluate(obs).squeeze(-1)
 
@@ -350,6 +360,7 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
             val_buf.append(values)
             demo_tgt_buf.append(demo_tgt)
             demo_mask_buf.append(demo_mask)
+            exec_buf.append(exec_mask)
             if demos is not None:
                 demo_tgt, demo_mask = _demo_targets(u, demos, device)
 
@@ -360,6 +371,7 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
         val_all = torch.cat(val_buf, dim=0)
         demo_tgt_all = torch.cat(demo_tgt_buf, dim=0)
         demo_mask_all = torch.cat(demo_mask_buf, dim=0)
+        exec_all = torch.cat(exec_buf, dim=0)
         success_all = torch.cat(success_buf).float()
 
         # One-step episodes: return = reward, advantage = return - value
@@ -432,9 +444,15 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
         if demos is not None:
             # Does the policy itself now solve the demonstrated cases? (its own sampled
             # action on demo episodes, not the demo's) — the failure loop's key number.
-            n_demo = int(demo_mask_all.sum())
+            # Demo-case success counts the policy's own grasps only: executed demo
+            # grasps measure the demos, not what the policy has learned.
+            own = demo_mask_all & ~exec_all
+            n_demo = int(own.sum())
             stats["demo_episodes"] = n_demo
-            stats["demo_success_rate"] = success_all[demo_mask_all].mean().item() if n_demo else float("nan")
+            stats["demo_success_rate"] = success_all[own].mean().item() if n_demo else float("nan")
+            n_exec = int(exec_all.sum())
+            stats["demo_exec_episodes"] = n_exec
+            stats["demo_exec_success_rate"] = success_all[exec_all].mean().item() if n_exec else float("nan")
             stats["demo_bc_loss"] = last_bc_loss
 
         if metrics_path is not None:
@@ -454,6 +472,8 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
                 f"grad={last_grad_norm:.2f}"
                 + (f"  demo_success={stats['demo_success_rate']*100:.1f}% (n={stats['demo_episodes']})  "
                    f"bc={last_bc_loss:.3f}" if demos is not None else "")
+                + (f"  demo_exec={stats['demo_exec_success_rate']*100:.1f}% (n={stats['demo_exec_episodes']})"
+                   if demos is not None and stats["demo_exec_episodes"] else "")
             )
 
         if writer is not None:
@@ -687,6 +707,7 @@ def main():
         curator=curator,
         demos=demos,
         bc_coef=args.bc_coef,
+        demo_exec_prob=args.demo_exec_prob,
     )
 
     writer.close()
