@@ -25,7 +25,7 @@ from isaaclab.app import AppLauncher
 parser = argparse.ArgumentParser(description="Play grasp-pose RL policy")
 parser.add_argument("--checkpoint", type=str, default=None,
                     help="Trained .pt (omit with --debug_action)")
-parser.add_argument("--debug_action", type=str, choices=["zero", "random", "antipodal", "center", "graspnet"],
+parser.add_argument("--debug_action", type=str, choices=["zero", "random", "antipodal", "center", "graspnet", "graspnet_filtered"],
                     default=None,
                     help="Skip checkpoint; use fixed/oracle action for IK/exec debug. "
                          "'antipodal' loads best horizontal antipodal (c1,c2) per shape. "
@@ -375,24 +375,62 @@ def _decode_action(action: torch.Tensor, cfg: GraspPoseEnvCfg) -> dict:
     }
 
 
-def graspnet_action_for_shape(u, shape: str, rank: int) -> torch.Tensor:
-    """six_dof action executing the rank-th Contact-GraspNet grasp (<instance>_graspnet.json,
-    scripts/generate_graspnet_labels.py) for env 0's object. Falls back to the zero
-    action when the object has no labels."""
+# Hand frame → finger pad centre along the approach (matches the env's floating hand).
+_HAND_TO_PADS_M = 0.1034
+
+
+def graspnet_action_for_shape(u, shape: str, rank: int, filtered: bool = False, top_k: int = 10) -> torch.Tensor:
+    """six_dof action executing a Contact-GraspNet grasp (<instance>_graspnet.json,
+    scripts/generate_graspnet_labels.py) for env 0's object, at its actual pose.
+
+    filtered=False: the rank-th grasp as ranked by GraspNet.
+    filtered=True:  the best-ranked of the top_k that passes geometric checks a real
+                    system can make without simulating: jaw opening within the
+                    gripper's range, approach not from below the table, jaw not
+                    vertical, and the hand clear of the table. Falls back to rank 0.
+    Falls back to the zero action when the object has no labels."""
     import json
     sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
     from pretrain_grasp_6dof import psi_of
+    from isaaclab.utils.math import quat_apply
 
     path = shape_asset(shape, "_graspnet.json")
     grasps = json.load(open(path))["grasps"] if path.exists() else []
     if not grasps:
         print(f"  [graspnet] no labels for {shape} — zero action")
         return torch.zeros(u.num_envs, int(u.cfg.action_space), device=u.device)
-    g = grasps[min(rank, len(grasps) - 1)]
     s = float(u.cfg.object_scale)
-    c1 = torch.tensor([g["c1"]], device=u.device) * s
-    c2 = torch.tensor([g["c2"]], device=u.device) * s
-    psi = psi_of(c1, c2, torch.tensor([g["approach"]], device=u.device))
+    q = u._obj_anchor[:1, 3:7]
+    pos = u._obj_anchor[:1, :3] - u.scene.env_origins[:1]
+    w_lo, w_hi = u.cfg.grasp_width_bounds
+
+    def candidate(g):
+        c1 = torch.tensor([g["c1"]], device=u.device) * s
+        c2 = torch.tensor([g["c2"]], device=u.device) * s
+        # The approach angle is defined in the world (relative to straight down),
+        # so the grasp is rotated by the object's actual orientation first.
+        c1w, c2w = quat_apply(q, c1), quat_apply(q, c2)
+        a_w = quat_apply(q, torch.tensor([g["approach"]], device=u.device))
+        return c1, c2, c1w, c2w, a_w, psi_of(c1w, c2w, a_w)
+
+    def feasible(c1w, c2w, a_w, psi) -> bool:
+        width = float((c2w - c1w).norm())
+        jaw = (c2w - c1w) / max(width, 1e-9)
+        palm_z = float((pos + 0.5 * (c1w + c2w) - a_w * _HAND_TO_PADS_M)[0, 2])
+        return (w_lo <= width <= w_hi and abs(float(psi)) <= math.pi / 2 + 1e-3
+                and abs(float(jaw[0, 2])) < 0.98 and palm_z >= u.cfg.table_surface_z + 0.02)
+
+    chosen = None
+    if filtered:
+        for g in grasps[:top_k]:
+            c = candidate(g)
+            if feasible(*c[2:]):
+                chosen = c
+                break
+    if chosen is None:
+        chosen = candidate(grasps[min(0 if filtered else rank, len(grasps) - 1)])
+    c1, c2, _, _, _, psi = chosen
+    psi = psi.clamp(-math.pi / 2, math.pi / 2)
     return u.encode_six_dof_action(c1.expand(u.num_envs, -1), c2.expand(u.num_envs, -1), psi.expand(u.num_envs))
 
 
@@ -577,8 +615,9 @@ def main():
             action = center_action_for_shape(shape, env_cfg, device)
             if args.num_envs > 1:
                 action = action.expand(args.num_envs, -1).clone()
-        elif args.debug_action == "graspnet":
-            action = graspnet_action_for_shape(env.unwrapped, shape, args.debug_rank)
+        elif args.debug_action in ("graspnet", "graspnet_filtered"):
+            action = graspnet_action_for_shape(env.unwrapped, shape, args.debug_rank,
+                                               filtered=args.debug_action == "graspnet_filtered")
         else:
             obs = _obs_tensor(obs_dict, device)
             with torch.no_grad():
