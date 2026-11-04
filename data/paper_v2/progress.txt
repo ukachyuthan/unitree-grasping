@@ -1,0 +1,20 @@
+20:31 start A_s1
+20:33 start A_s2
+20:41 first v2 start discarded: session restart killed it at iter ~2; relaunched with --reset_std 0.3 (same metric noise as 0.5 at ±7 cm)
+20:41 start A_s1
+20:43 start A_s2
+02:24 trained A_s2 → data/grasp_logs/paper_v2/A_s2/grasp_pose_envs256_20261102_204435/grasp_pose_final.pt
+02:24 trained A_s1 → data/grasp_logs/paper_v2/A_s1/grasp_pose_envs256_20261102_204438/grasp_pose_final.pt
+02:38 start A_s3
+05:44 trained A_s3 → data/grasp_logs/paper_v2/A_s3/grasp_pose_envs256_20261103_023935/grasp_pose_final.pt
+05:50 v2 RL done
+23:02 start D_s1
+23:04 start D_s2
+06:11 trained D_s1 → data/grasp_logs/paper_v2/D_s1/grasp_pose_envs256_20261103_230339/grasp_pose_final.pt
+06:12 trained D_s2 → data/grasp_logs/paper_v2/D_s2/grasp_pose_envs256_20261103_230555/grasp_pose_final.pt
+06:12 start D_s3
+09:58 D_s3 froze when the laptop slept at 08:03 (iter 60); archived to D_s3_discarded_sleep, restarting from scratch
+09:58 start D_s3
+14:06 trained D_s3 → data/grasp_logs/paper_v2/D_s3/grasp_pose_envs256_20261104_095933/grasp_pose_final.pt
+14:06 v2 RL + demos done
+14:13 curve done

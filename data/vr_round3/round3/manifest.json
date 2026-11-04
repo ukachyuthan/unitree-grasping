@@ -1,0 +1,1079 @@
+{
+ "schema": "unitree-grasp-failure-manifest/v1",
+ "run": "round3",
+ "updated_at": "2026-11-03T11:54:12+00:00",
+ "cases": [
+  {
+   "case_id": "ycb_009_gelatin_box.v007__it000051__q111__s1",
+   "shape": "ycb_009_gelatin_box.v007",
+   "yaw_bin": 3,
+   "iteration": 53,
+   "mean_failed_reward": 0.289128
+  },
+  {
+   "case_id": "ycb_037_scissors.v004__it000051__q527__s1",
+   "shape": "ycb_037_scissors.v004",
+   "yaw_bin": 7,
+   "iteration": 0,
+   "mean_failed_reward": 0.285625
+  },
+  {
+   "case_id": "ycb_028_skillet_lid.v006__it000052__q2009__s1",
+   "shape": "ycb_028_skillet_lid.v006",
+   "yaw_bin": 1,
+   "iteration": 0,
+   "mean_failed_reward": 0.387582
+  },
+  {
+   "case_id": "ycb_071_nine_hole_peg_test.v003__it000051__q985__s1",
+   "shape": "ycb_071_nine_hole_peg_test.v003",
+   "yaw_bin": 5,
+   "iteration": 0,
+   "mean_failed_reward": 0.37224
+  },
+  {
+   "case_id": "ycb_026_sponge.v001__it000051__q97__s1",
+   "shape": "ycb_026_sponge.v001",
+   "yaw_bin": 5,
+   "iteration": 51,
+   "mean_failed_reward": 0.304198
+  },
+  {
+   "case_id": "ycb_026_sponge.v003__it000051__q249__s1",
+   "shape": "ycb_026_sponge.v003",
+   "yaw_bin": 5,
+   "iteration": 0,
+   "mean_failed_reward": 0.285858
+  },
+  {
+   "case_id": "t_shape__it000052__q2522__s1",
+   "shape": "t_shape",
+   "yaw_bin": 7,
+   "iteration": 0,
+   "mean_failed_reward": 0.358856
+  },
+  {
+   "case_id": "torus.v003__it000051__q289__s1",
+   "shape": "torus.v003",
+   "yaw_bin": 6,
+   "iteration": 0,
+   "mean_failed_reward": 0.365888
+  },
+  {
+   "case_id": "ycb_024_bowl.v004__it000054__q5013__s1",
+   "shape": "ycb_024_bowl.v004",
+   "yaw_bin": 3,
+   "iteration": 52,
+   "mean_failed_reward": 0.339625
+  },
+  {
+   "case_id": "ycb_052_extra_large_clamp.v003__it000053__q3391__s1",
+   "shape": "ycb_052_extra_large_clamp.v003",
+   "yaw_bin": 1,
+   "iteration": 0,
+   "mean_failed_reward": 0.41073
+  },
+  {
+   "case_id": "torus.v006__it000053__q3318__s1",
+   "shape": "torus.v006",
+   "yaw_bin": 0,
+   "iteration": 0,
+   "mean_failed_reward": 0.567822
+  },
+  {
+   "case_id": "ycb_008_pudding_box.v004__it000052__q1635__s1",
+   "shape": "ycb_008_pudding_box.v004",
+   "yaw_bin": 1,
+   "iteration": 0,
+   "mean_failed_reward": 0.399524
+  },
+  {
+   "case_id": "ycb_052_extra_large_clamp.v006__it000052__q2840__s1",
+   "shape": "ycb_052_extra_large_clamp.v006",
+   "yaw_bin": 7,
+   "iteration": 30,
+   "mean_failed_reward": 0.418038
+  },
+  {
+   "case_id": "ycb_008_pudding_box.v005__it000051__q288__s1",
+   "shape": "ycb_008_pudding_box.v005",
+   "yaw_bin": 7,
+   "iteration": 0,
+   "mean_failed_reward": 0.457259
+  },
+  {
+   "case_id": "ycb_026_sponge.v006__it000051__q354__s1",
+   "shape": "ycb_026_sponge.v006",
+   "yaw_bin": 4,
+   "iteration": 0,
+   "mean_failed_reward": 0.349525
+  },
+  {
+   "case_id": "ycb_071_nine_hole_peg_test__it000051__q399__s1",
+   "shape": "ycb_071_nine_hole_peg_test",
+   "yaw_bin": 6,
+   "iteration": 16,
+   "mean_failed_reward": 0.404143
+  },
+  {
+   "case_id": "ycb_028_skillet_lid.v006__it000051__q132__s1",
+   "shape": "ycb_028_skillet_lid.v006",
+   "yaw_bin": 0,
+   "iteration": 0,
+   "mean_failed_reward": 0.359602
+  },
+  {
+   "case_id": "ycb_008_pudding_box.v002__it000053__q3720__s1",
+   "shape": "ycb_008_pudding_box.v002",
+   "yaw_bin": 6,
+   "iteration": 0,
+   "mean_failed_reward": 0.408672
+  },
+  {
+   "case_id": "c_shape.v005__it000054__q5099__s1",
+   "shape": "c_shape.v005",
+   "yaw_bin": 0,
+   "iteration": 0,
+   "mean_failed_reward": 0.339363
+  },
+  {
+   "case_id": "torus.v003__it000053__q3079__s1",
+   "shape": "torus.v003",
+   "yaw_bin": 7,
+   "iteration": 1,
+   "mean_failed_reward": 0.326025
+  },
+  {
+   "case_id": "torus.v006__it000051__q830__s1",
+   "shape": "torus.v006",
+   "yaw_bin": 4,
+   "iteration": 0,
+   "mean_failed_reward": 0.434267
+  },
+  {
+   "case_id": "ycb_071_nine_hole_peg_test__it000052__q2674__s1",
+   "shape": "ycb_071_nine_hole_peg_test",
+   "yaw_bin": 1,
+   "iteration": 29,
+   "mean_failed_reward": 0.438141
+  },
+  {
+   "case_id": "torus.v006__it000052__q2020__s1",
+   "shape": "torus.v006",
+   "yaw_bin": 7,
+   "iteration": 0,
+   "mean_failed_reward": 0.418686
+  },
+  {
+   "case_id": "ycb_030_fork.v001__it000051__q1109__s1",
+   "shape": "ycb_030_fork.v001",
+   "yaw_bin": 1,
+   "iteration": 0,
+   "mean_failed_reward": 0.415541
+  },
+  {
+   "case_id": "ycb_026_sponge.v002__it000053__q4202__s1",
+   "shape": "ycb_026_sponge.v002",
+   "yaw_bin": 2,
+   "iteration": 0,
+   "mean_failed_reward": 0.238762
+  },
+  {
+   "case_id": "ycb_052_extra_large_clamp.v006__it000055__q6215__s1",
+   "shape": "ycb_052_extra_large_clamp.v006",
+   "yaw_bin": 1,
+   "iteration": 47,
+   "mean_failed_reward": 0.444902
+  },
+  {
+   "case_id": "ycb_042_adjustable_wrench.v001__it000051__q253__s1",
+   "shape": "ycb_042_adjustable_wrench.v001",
+   "yaw_bin": 2,
+   "iteration": 64,
+   "mean_failed_reward": 0.385526
+  },
+  {
+   "case_id": "ycb_026_sponge.v004__it000054__q5474__s1",
+   "shape": "ycb_026_sponge.v004",
+   "yaw_bin": 4,
+   "iteration": 9,
+   "mean_failed_reward": 0.330299
+  },
+  {
+   "case_id": "ycb_026_sponge.v005__it000053__q4098__s1",
+   "shape": "ycb_026_sponge.v005",
+   "yaw_bin": 4,
+   "iteration": 13,
+   "mean_failed_reward": 0.446916
+  },
+  {
+   "case_id": "ycb_071_nine_hole_peg_test.v004__it000053__q3957__s1",
+   "shape": "ycb_071_nine_hole_peg_test.v004",
+   "yaw_bin": 5,
+   "iteration": 0,
+   "mean_failed_reward": 0.499149
+  },
+  {
+   "case_id": "ycb_052_extra_large_clamp__it000051__q182__s1",
+   "shape": "ycb_052_extra_large_clamp",
+   "yaw_bin": 7,
+   "iteration": 38,
+   "mean_failed_reward": 0.392953
+  },
+  {
+   "case_id": "ycb_028_skillet_lid.v005__it000054__q4944__s1",
+   "shape": "ycb_028_skillet_lid.v005",
+   "yaw_bin": 4,
+   "iteration": 32,
+   "mean_failed_reward": 0.331602
+  },
+  {
+   "case_id": "ycb_071_nine_hole_peg_test__it000052__q1601__s1",
+   "shape": "ycb_071_nine_hole_peg_test",
+   "yaw_bin": 4,
+   "iteration": 46,
+   "mean_failed_reward": 0.473552
+  },
+  {
+   "case_id": "ycb_026_sponge.v006__it000051__q554__s1",
+   "shape": "ycb_026_sponge.v006",
+   "yaw_bin": 6,
+   "iteration": 26,
+   "mean_failed_reward": 0.343529
+  },
+  {
+   "case_id": "ycb_042_adjustable_wrench.v001__it000051__q492__s1",
+   "shape": "ycb_042_adjustable_wrench.v001",
+   "yaw_bin": 1,
+   "iteration": 0,
+   "mean_failed_reward": 0.217492
+  },
+  {
+   "case_id": "ycb_071_nine_hole_peg_test.v005__it000057__q9410__s1",
+   "shape": "ycb_071_nine_hole_peg_test.v005",
+   "yaw_bin": 6,
+   "iteration": 22,
+   "mean_failed_reward": 0.423468
+  },
+  {
+   "case_id": "c_shape.v001__it000053__q3637__s1",
+   "shape": "c_shape.v001",
+   "yaw_bin": 7,
+   "iteration": 0,
+   "mean_failed_reward": 0.407261
+  },
+  {
+   "case_id": "ycb_030_fork.v003__it000053__q3322__s1",
+   "shape": "ycb_030_fork.v003",
+   "yaw_bin": 3,
+   "iteration": 66,
+   "mean_failed_reward": 0.518027
+  },
+  {
+   "case_id": "c_shape.v001__it000055__q6312__s1",
+   "shape": "c_shape.v001",
+   "yaw_bin": 0,
+   "iteration": 45,
+   "mean_failed_reward": 0.310749
+  },
+  {
+   "case_id": "ycb_052_extra_large_clamp__it000056__q7868__s1",
+   "shape": "ycb_052_extra_large_clamp",
+   "yaw_bin": 1,
+   "iteration": 0,
+   "mean_failed_reward": 0.393545
+  },
+  {
+   "case_id": "torus.v006__it000057__q8763__s1",
+   "shape": "torus.v006",
+   "yaw_bin": 3,
+   "iteration": 0,
+   "mean_failed_reward": 0.409032
+  },
+  {
+   "case_id": "ycb_008_pudding_box.v006__it000056__q7211__s1",
+   "shape": "ycb_008_pudding_box.v006",
+   "yaw_bin": 3,
+   "iteration": 14,
+   "mean_failed_reward": 0.33147
+  },
+  {
+   "case_id": "torus.v003__it000058__q10148__s1",
+   "shape": "torus.v003",
+   "yaw_bin": 5,
+   "iteration": 55,
+   "mean_failed_reward": 0.446628
+  },
+  {
+   "case_id": "ycb_026_sponge.v006__it000051__q753__s1",
+   "shape": "ycb_026_sponge.v006",
+   "yaw_bin": 5,
+   "iteration": 41,
+   "mean_failed_reward": 0.267522
+  },
+  {
+   "case_id": "ycb_030_fork.v001__it000056__q7527__s1",
+   "shape": "ycb_030_fork.v001",
+   "yaw_bin": 6,
+   "iteration": 0,
+   "mean_failed_reward": 0.405443
+  },
+  {
+   "case_id": "ycb_028_skillet_lid.v005__it000052__q2582__s1",
+   "shape": "ycb_028_skillet_lid.v005",
+   "yaw_bin": 3,
+   "iteration": 18,
+   "mean_failed_reward": 0.179716
+  },
+  {
+   "case_id": "ycb_028_skillet_lid.v006__it000058__q10220__s1",
+   "shape": "ycb_028_skillet_lid.v006",
+   "yaw_bin": 7,
+   "iteration": 0,
+   "mean_failed_reward": 0.639674
+  },
+  {
+   "case_id": "torus.v006__it000052__q2321__s1",
+   "shape": "torus.v006",
+   "yaw_bin": 5,
+   "iteration": 15,
+   "mean_failed_reward": 0.400639
+  },
+  {
+   "case_id": "ycb_030_fork.v001__it000057__q8958__s1",
+   "shape": "ycb_030_fork.v001",
+   "yaw_bin": 2,
+   "iteration": 0,
+   "mean_failed_reward": 0.366995
+  },
+  {
+   "case_id": "ycb_030_fork.v003__it000051__q76__s2",
+   "shape": "ycb_030_fork.v003",
+   "yaw_bin": 4,
+   "iteration": 24,
+   "mean_failed_reward": 0.368716
+  },
+  {
+   "case_id": "ycb_030_fork.v003__it000051__q345__s2",
+   "shape": "ycb_030_fork.v003",
+   "yaw_bin": 2,
+   "iteration": 0,
+   "mean_failed_reward": 0.434763
+  },
+  {
+   "case_id": "ycb_030_fork.v003__it000051__q337__s2",
+   "shape": "ycb_030_fork.v003",
+   "yaw_bin": 6,
+   "iteration": 39,
+   "mean_failed_reward": 0.278185
+  },
+  {
+   "case_id": "ycb_008_pudding_box.v002__it000051__q320__s2",
+   "shape": "ycb_008_pudding_box.v002",
+   "yaw_bin": 2,
+   "iteration": 54,
+   "mean_failed_reward": 0.358051
+  },
+  {
+   "case_id": "ycb_071_nine_hole_peg_test.v004__it000051__q50__s2",
+   "shape": "ycb_071_nine_hole_peg_test.v004",
+   "yaw_bin": 1,
+   "iteration": 60,
+   "mean_failed_reward": 0.477375
+  },
+  {
+   "case_id": "stepped_cyl.v001__it000051__q102__s2",
+   "shape": "stepped_cyl.v001",
+   "yaw_bin": 5,
+   "iteration": 77,
+   "mean_failed_reward": 0.53647
+  },
+  {
+   "case_id": "irregular_ext.v007__it000051__q634__s2",
+   "shape": "irregular_ext.v007",
+   "yaw_bin": 2,
+   "iteration": 80,
+   "mean_failed_reward": 0.50536
+  },
+  {
+   "case_id": "ycb_008_pudding_box.v003__it000051__q332__s2",
+   "shape": "ycb_008_pudding_box.v003",
+   "yaw_bin": 3,
+   "iteration": 7,
+   "mean_failed_reward": 0.540473
+  },
+  {
+   "case_id": "ycb_052_extra_large_clamp.v005__it000051__q281__s2",
+   "shape": "ycb_052_extra_large_clamp.v005",
+   "yaw_bin": 7,
+   "iteration": 0,
+   "mean_failed_reward": 0.521182
+  },
+  {
+   "case_id": "ycb_008_pudding_box.v002__it000052__q1950__s2",
+   "shape": "ycb_008_pudding_box.v002",
+   "yaw_bin": 5,
+   "iteration": 0,
+   "mean_failed_reward": 0.261096
+  },
+  {
+   "case_id": "ycb_073-a_lego_duplo.v005__it000051__q699__s2",
+   "shape": "ycb_073-a_lego_duplo.v005",
+   "yaw_bin": 4,
+   "iteration": 59,
+   "mean_failed_reward": 0.175827
+  },
+  {
+   "case_id": "ycb_026_sponge.v005__it000051__q199__s2",
+   "shape": "ycb_026_sponge.v005",
+   "yaw_bin": 1,
+   "iteration": 0,
+   "mean_failed_reward": 0.4116
+  },
+  {
+   "case_id": "l_shape.v005__it000051__q267__s2",
+   "shape": "l_shape.v005",
+   "yaw_bin": 0,
+   "iteration": 79,
+   "mean_failed_reward": 0.43904
+  },
+  {
+   "case_id": "star_prism.v007__it000053__q4034__s2",
+   "shape": "star_prism.v007",
+   "yaw_bin": 6,
+   "iteration": 78,
+   "mean_failed_reward": 0.391095
+  },
+  {
+   "case_id": "ycb_026_sponge.v001__it000052__q2406__s2",
+   "shape": "ycb_026_sponge.v001",
+   "yaw_bin": 1,
+   "iteration": 0,
+   "mean_failed_reward": 0.319121
+  },
+  {
+   "case_id": "ycb_052_extra_large_clamp.v004__it000051__q158__s2",
+   "shape": "ycb_052_extra_large_clamp.v004",
+   "yaw_bin": 1,
+   "iteration": 23,
+   "mean_failed_reward": 0.380922
+  },
+  {
+   "case_id": "ycb_026_sponge.v002__it000053__q3521__s2",
+   "shape": "ycb_026_sponge.v002",
+   "yaw_bin": 6,
+   "iteration": 0,
+   "mean_failed_reward": 0.347035
+  },
+  {
+   "case_id": "stepped_cyl.v001__it000051__q519__s2",
+   "shape": "stepped_cyl.v001",
+   "yaw_bin": 2,
+   "iteration": 56,
+   "mean_failed_reward": 0.320694
+  },
+  {
+   "case_id": "ycb_037_scissors__it000054__q4604__s2",
+   "shape": "ycb_037_scissors",
+   "yaw_bin": 6,
+   "iteration": 65,
+   "mean_failed_reward": 0.270816
+  },
+  {
+   "case_id": "star_prism.v007__it000051__q1306__s2",
+   "shape": "star_prism.v007",
+   "yaw_bin": 1,
+   "iteration": 0,
+   "mean_failed_reward": 0.598329
+  },
+  {
+   "case_id": "ycb_008_pudding_box.v002__it000052__q2418__s2",
+   "shape": "ycb_008_pudding_box.v002",
+   "yaw_bin": 3,
+   "iteration": 0,
+   "mean_failed_reward": 0.405372
+  },
+  {
+   "case_id": "ycb_028_skillet_lid.v006__it000054__q5440__s2",
+   "shape": "ycb_028_skillet_lid.v006",
+   "yaw_bin": 3,
+   "iteration": 40,
+   "mean_failed_reward": 0.498243
+  },
+  {
+   "case_id": "ycb_024_bowl.v001__it000053__q3153__s2",
+   "shape": "ycb_024_bowl.v001",
+   "yaw_bin": 4,
+   "iteration": 0,
+   "mean_failed_reward": 0.313866
+  },
+  {
+   "case_id": "ycb_009_gelatin_box.v001__it000051__q469__s2",
+   "shape": "ycb_009_gelatin_box.v001",
+   "yaw_bin": 2,
+   "iteration": 0,
+   "mean_failed_reward": 0.3326
+  },
+  {
+   "case_id": "c_shape.v002__it000053__q3030__s2",
+   "shape": "c_shape.v002",
+   "yaw_bin": 0,
+   "iteration": 57,
+   "mean_failed_reward": 0.400999
+  },
+  {
+   "case_id": "ycb_026_sponge.v005__it000055__q7014__s2",
+   "shape": "ycb_026_sponge.v005",
+   "yaw_bin": 2,
+   "iteration": 19,
+   "mean_failed_reward": 0.434318
+  },
+  {
+   "case_id": "torus.v006__it000056__q7547__s2",
+   "shape": "torus.v006",
+   "yaw_bin": 4,
+   "iteration": 0,
+   "mean_failed_reward": 0.41515
+  },
+  {
+   "case_id": "ycb_028_skillet_lid.v001__it000053__q3577__s2",
+   "shape": "ycb_028_skillet_lid.v001",
+   "yaw_bin": 7,
+   "iteration": 0,
+   "mean_failed_reward": 0.556028
+  },
+  {
+   "case_id": "torus__it000051__q88__s2",
+   "shape": "torus",
+   "yaw_bin": 2,
+   "iteration": 11,
+   "mean_failed_reward": 0.451171
+  },
+  {
+   "case_id": "ycb_052_extra_large_clamp.v002__it000051__q1451__s2",
+   "shape": "ycb_052_extra_large_clamp.v002",
+   "yaw_bin": 7,
+   "iteration": 0,
+   "mean_failed_reward": 0.504796
+  },
+  {
+   "case_id": "ycb_028_skillet_lid.v005__it000056__q8029__s2",
+   "shape": "ycb_028_skillet_lid.v005",
+   "yaw_bin": 0,
+   "iteration": 67,
+   "mean_failed_reward": 0.290069
+  },
+  {
+   "case_id": "ycb_071_nine_hole_peg_test.v006__it000055__q5986__s2",
+   "shape": "ycb_071_nine_hole_peg_test.v006",
+   "yaw_bin": 4,
+   "iteration": 0,
+   "mean_failed_reward": 0.500942
+  },
+  {
+   "case_id": "ycb_010_potted_meat_can.v005__it000054__q4733__s2",
+   "shape": "ycb_010_potted_meat_can.v005",
+   "yaw_bin": 0,
+   "iteration": 0,
+   "mean_failed_reward": 0.580907
+  },
+  {
+   "case_id": "ycb_037_scissors__it000051__q270__s2",
+   "shape": "ycb_037_scissors",
+   "yaw_bin": 5,
+   "iteration": 48,
+   "mean_failed_reward": 0.179632
+  },
+  {
+   "case_id": "torus.v006__it000053__q4190__s2",
+   "shape": "torus.v006",
+   "yaw_bin": 3,
+   "iteration": 0,
+   "mean_failed_reward": 0.353911
+  },
+  {
+   "case_id": "torus.v003__it000054__q4816__s2",
+   "shape": "torus.v003",
+   "yaw_bin": 1,
+   "iteration": 0,
+   "mean_failed_reward": 0.340435
+  },
+  {
+   "case_id": "ycb_071_nine_hole_peg_test.v003__it000054__q5427__s2",
+   "shape": "ycb_071_nine_hole_peg_test.v003",
+   "yaw_bin": 5,
+   "iteration": 0,
+   "mean_failed_reward": 0.382937
+  },
+  {
+   "case_id": "torus__it000054__q4700__s2",
+   "shape": "torus",
+   "yaw_bin": 7,
+   "iteration": 3,
+   "mean_failed_reward": 0.457023
+  },
+  {
+   "case_id": "torus.v003__it000057__q9412__s2",
+   "shape": "torus.v003",
+   "yaw_bin": 0,
+   "iteration": 0,
+   "mean_failed_reward": 0.390397
+  },
+  {
+   "case_id": "ycb_071_nine_hole_peg_test.v007__it000054__q4640__s2",
+   "shape": "ycb_071_nine_hole_peg_test.v007",
+   "yaw_bin": 3,
+   "iteration": 0,
+   "mean_failed_reward": 0.252218
+  },
+  {
+   "case_id": "ycb_025_mug.v003__it000051__q1098__s2",
+   "shape": "ycb_025_mug.v003",
+   "yaw_bin": 3,
+   "iteration": 69,
+   "mean_failed_reward": 0.393694
+  },
+  {
+   "case_id": "torus.v006__it000057__q8733__s2",
+   "shape": "torus.v006",
+   "yaw_bin": 7,
+   "iteration": 35,
+   "mean_failed_reward": 0.425207
+  },
+  {
+   "case_id": "ycb_026_sponge.v006__it000056__q7885__s2",
+   "shape": "ycb_026_sponge.v006",
+   "yaw_bin": 0,
+   "iteration": 0,
+   "mean_failed_reward": 0.362425
+  },
+  {
+   "case_id": "ycb_071_nine_hole_peg_test.v002__it000055__q6364__s2",
+   "shape": "ycb_071_nine_hole_peg_test.v002",
+   "yaw_bin": 5,
+   "iteration": 12,
+   "mean_failed_reward": 0.255109
+  },
+  {
+   "case_id": "c_shape.v002__it000051__q294__s3",
+   "shape": "c_shape.v002",
+   "yaw_bin": 1,
+   "iteration": 36,
+   "mean_failed_reward": 0.457247
+  },
+  {
+   "case_id": "bracket.v004__it000051__q436__s3",
+   "shape": "bracket.v004",
+   "yaw_bin": 1,
+   "iteration": 0,
+   "mean_failed_reward": 0.355015
+  },
+  {
+   "case_id": "ycb_052_extra_large_clamp.v004__it000051__q377__s3",
+   "shape": "ycb_052_extra_large_clamp.v004",
+   "yaw_bin": 1,
+   "iteration": 63,
+   "mean_failed_reward": 0.484464
+  },
+  {
+   "case_id": "ycb_053_mini_soccer_ball.v007__it000051__q1325__s3",
+   "shape": "ycb_053_mini_soccer_ball.v007",
+   "yaw_bin": 1,
+   "iteration": 0,
+   "mean_failed_reward": 0.380713
+  },
+  {
+   "case_id": "bracket.v005__it000051__q306__s3",
+   "shape": "bracket.v005",
+   "yaw_bin": 3,
+   "iteration": 58,
+   "mean_failed_reward": 0.204276
+  },
+  {
+   "case_id": "ycb_010_potted_meat_can.v001__it000051__q265__s3",
+   "shape": "ycb_010_potted_meat_can.v001",
+   "yaw_bin": 1,
+   "iteration": 71,
+   "mean_failed_reward": 0.440673
+  },
+  {
+   "case_id": "ycb_026_sponge.v002__it000051__q138__s3",
+   "shape": "ycb_026_sponge.v002",
+   "yaw_bin": 6,
+   "iteration": 68,
+   "mean_failed_reward": 0.283904
+  },
+  {
+   "case_id": "ycb_028_skillet_lid.v007__it000051__q119__s3",
+   "shape": "ycb_028_skillet_lid.v007",
+   "yaw_bin": 6,
+   "iteration": 0,
+   "mean_failed_reward": 0.426942
+  },
+  {
+   "case_id": "ycb_009_gelatin_box.v007__it000051__q1336__s3",
+   "shape": "ycb_009_gelatin_box.v007",
+   "yaw_bin": 0,
+   "iteration": 72,
+   "mean_failed_reward": 0.249273
+  },
+  {
+   "case_id": "torus.v003__it000051__q314__s3",
+   "shape": "torus.v003",
+   "yaw_bin": 2,
+   "iteration": 0,
+   "mean_failed_reward": 0.407264
+  },
+  {
+   "case_id": "torus__it000051__q217__s3",
+   "shape": "torus",
+   "yaw_bin": 1,
+   "iteration": 0,
+   "mean_failed_reward": 0.310312
+  },
+  {
+   "case_id": "ycb_030_fork.v003__it000052__q1637__s3",
+   "shape": "ycb_030_fork.v003",
+   "yaw_bin": 2,
+   "iteration": 49,
+   "mean_failed_reward": 0.365135
+  },
+  {
+   "case_id": "ycb_026_sponge.v002__it000052__q2194__s3",
+   "shape": "ycb_026_sponge.v002",
+   "yaw_bin": 5,
+   "iteration": 33,
+   "mean_failed_reward": 0.379762
+  },
+  {
+   "case_id": "ycb_071_nine_hole_peg_test__it000053__q3168__s3",
+   "shape": "ycb_071_nine_hole_peg_test",
+   "yaw_bin": 2,
+   "iteration": 37,
+   "mean_failed_reward": 0.346683
+  },
+  {
+   "case_id": "ycb_008_pudding_box.v005__it000053__q4068__s3",
+   "shape": "ycb_008_pudding_box.v005",
+   "yaw_bin": 2,
+   "iteration": 10,
+   "mean_failed_reward": 0.303146
+  },
+  {
+   "case_id": "ycb_030_fork.v001__it000051__q479__s3",
+   "shape": "ycb_030_fork.v001",
+   "yaw_bin": 3,
+   "iteration": 31,
+   "mean_failed_reward": 0.437299
+  },
+  {
+   "case_id": "c_shape.v001__it000051__q182__s3",
+   "shape": "c_shape.v001",
+   "yaw_bin": 2,
+   "iteration": 81,
+   "mean_failed_reward": 0.330719
+  },
+  {
+   "case_id": "ycb_008_pudding_box.v002__it000051__q228__s3",
+   "shape": "ycb_008_pudding_box.v002",
+   "yaw_bin": 5,
+   "iteration": 34,
+   "mean_failed_reward": 0.290419
+  },
+  {
+   "case_id": "torus.v006__it000053__q3121__s3",
+   "shape": "torus.v006",
+   "yaw_bin": 2,
+   "iteration": 8,
+   "mean_failed_reward": 0.440289
+  },
+  {
+   "case_id": "ycb_008_pudding_box.v003__it000051__q410__s3",
+   "shape": "ycb_008_pudding_box.v003",
+   "yaw_bin": 3,
+   "iteration": 0,
+   "mean_failed_reward": 0.432583
+  },
+  {
+   "case_id": "torus.v003__it000052__q2763__s3",
+   "shape": "torus.v003",
+   "yaw_bin": 5,
+   "iteration": 28,
+   "mean_failed_reward": 0.343801
+  },
+  {
+   "case_id": "ycb_008_pudding_box.v002__it000051__q414__s3",
+   "shape": "ycb_008_pudding_box.v002",
+   "yaw_bin": 2,
+   "iteration": 0,
+   "mean_failed_reward": 0.264339
+  },
+  {
+   "case_id": "ycb_028_skillet_lid.v005__it000054__q4969__s3",
+   "shape": "ycb_028_skillet_lid.v005",
+   "yaw_bin": 4,
+   "iteration": 50,
+   "mean_failed_reward": 0.403649
+  },
+  {
+   "case_id": "ycb_026_sponge.v001__it000051__q511__s3",
+   "shape": "ycb_026_sponge.v001",
+   "yaw_bin": 1,
+   "iteration": 0,
+   "mean_failed_reward": 0.342207
+  },
+  {
+   "case_id": "torus__it000053__q3281__s3",
+   "shape": "torus",
+   "yaw_bin": 7,
+   "iteration": 5,
+   "mean_failed_reward": 0.336784
+  },
+  {
+   "case_id": "ycb_030_fork.v001__it000051__q884__s3",
+   "shape": "ycb_030_fork.v001",
+   "yaw_bin": 0,
+   "iteration": 0,
+   "mean_failed_reward": 0.3425
+  },
+  {
+   "case_id": "ycb_070-a_colored_wood_blocks__it000051__q142__s3",
+   "shape": "ycb_070-a_colored_wood_blocks",
+   "yaw_bin": 1,
+   "iteration": 61,
+   "mean_failed_reward": 0.366714
+  },
+  {
+   "case_id": "ycb_024_bowl.v003__it000055__q5975__s3",
+   "shape": "ycb_024_bowl.v003",
+   "yaw_bin": 4,
+   "iteration": 42,
+   "mean_failed_reward": 0.417455
+  },
+  {
+   "case_id": "t_shape.v003__it000054__q4501__s3",
+   "shape": "t_shape.v003",
+   "yaw_bin": 2,
+   "iteration": 76,
+   "mean_failed_reward": 0.387312
+  },
+  {
+   "case_id": "torus__it000054__q4871__s3",
+   "shape": "torus",
+   "yaw_bin": 3,
+   "iteration": 2,
+   "mean_failed_reward": 0.389991
+  },
+  {
+   "case_id": "wedge.v003__it000054__q5245__s3",
+   "shape": "wedge.v003",
+   "yaw_bin": 2,
+   "iteration": 74,
+   "mean_failed_reward": 0.2504
+  },
+  {
+   "case_id": "ycb_037_scissors.v004__it000053__q3535__s3",
+   "shape": "ycb_037_scissors.v004",
+   "yaw_bin": 0,
+   "iteration": 0,
+   "mean_failed_reward": 0.375305
+  },
+  {
+   "case_id": "ycb_026_sponge.v006__it000051__q495__s3",
+   "shape": "ycb_026_sponge.v006",
+   "yaw_bin": 0,
+   "iteration": 4,
+   "mean_failed_reward": 0.422358
+  },
+  {
+   "case_id": "c_shape.v003__it000051__q47__s3",
+   "shape": "c_shape.v003",
+   "yaw_bin": 3,
+   "iteration": 0,
+   "mean_failed_reward": 0.463497
+  },
+  {
+   "case_id": "torus.v006__it000056__q7268__s3",
+   "shape": "torus.v006",
+   "yaw_bin": 6,
+   "iteration": 44,
+   "mean_failed_reward": 0.426949
+  },
+  {
+   "case_id": "ycb_052_extra_large_clamp.v003__it000055__q5721__s3",
+   "shape": "ycb_052_extra_large_clamp.v003",
+   "yaw_bin": 1,
+   "iteration": 0,
+   "mean_failed_reward": 0.327685
+  },
+  {
+   "case_id": "ycb_009_gelatin_box.v007__it000055__q5621__s3",
+   "shape": "ycb_009_gelatin_box.v007",
+   "yaw_bin": 3,
+   "iteration": 0,
+   "mean_failed_reward": 0.291314
+  },
+  {
+   "case_id": "ycb_052_extra_large_clamp__it000051__q568__s3",
+   "shape": "ycb_052_extra_large_clamp",
+   "yaw_bin": 2,
+   "iteration": 17,
+   "mean_failed_reward": 0.384294
+  },
+  {
+   "case_id": "ycb_028_skillet_lid.v005__it000053__q3417__s3",
+   "shape": "ycb_028_skillet_lid.v005",
+   "yaw_bin": 1,
+   "iteration": 25,
+   "mean_failed_reward": 0.3365
+  },
+  {
+   "case_id": "torus.v006__it000051__q390__s3",
+   "shape": "torus.v006",
+   "yaw_bin": 0,
+   "iteration": 75,
+   "mean_failed_reward": 0.432548
+  },
+  {
+   "case_id": "torus.v006__it000052__q2122__s3",
+   "shape": "torus.v006",
+   "yaw_bin": 5,
+   "iteration": 0,
+   "mean_failed_reward": 0.309652
+  },
+  {
+   "case_id": "ycb_008_pudding_box.v006__it000051__q293__s3",
+   "shape": "ycb_008_pudding_box.v006",
+   "yaw_bin": 4,
+   "iteration": 73,
+   "mean_failed_reward": 0.326518
+  },
+  {
+   "case_id": "ycb_026_sponge.v006__it000054__q4241__s3",
+   "shape": "ycb_026_sponge.v006",
+   "yaw_bin": 1,
+   "iteration": 6,
+   "mean_failed_reward": 0.420734
+  },
+  {
+   "case_id": "stepped_cyl.v004__it000056__q7931__s3",
+   "shape": "stepped_cyl.v004",
+   "yaw_bin": 4,
+   "iteration": 0,
+   "mean_failed_reward": 0.341185
+  },
+  {
+   "case_id": "ycb_024_bowl.v003__it000056__q7128__s3",
+   "shape": "ycb_024_bowl.v003",
+   "yaw_bin": 1,
+   "iteration": 0,
+   "mean_failed_reward": 0.394894
+  },
+  {
+   "case_id": "ycb_008_pudding_box.v002__it000055__q6314__s3",
+   "shape": "ycb_008_pudding_box.v002",
+   "yaw_bin": 3,
+   "iteration": 0,
+   "mean_failed_reward": 0.332456
+  },
+  {
+   "case_id": "ycb_024_bowl__it000052__q1625__s3",
+   "shape": "ycb_024_bowl",
+   "yaw_bin": 0,
+   "iteration": 0,
+   "mean_failed_reward": 0.498257
+  },
+  {
+   "case_id": "ycb_008_pudding_box.v004__it000056__q7927__s3",
+   "shape": "ycb_008_pudding_box.v004",
+   "yaw_bin": 5,
+   "iteration": 0,
+   "mean_failed_reward": 0.450731
+  },
+  {
+   "case_id": "ycb_008_pudding_box.v005__it000052__q1486__s3",
+   "shape": "ycb_008_pudding_box.v005",
+   "yaw_bin": 6,
+   "iteration": 27,
+   "mean_failed_reward": 0.42188
+  },
+  {
+   "case_id": "ycb_028_skillet_lid.v005__it000053__q3338__s3",
+   "shape": "ycb_028_skillet_lid.v005",
+   "yaw_bin": 0,
+   "iteration": 0,
+   "mean_failed_reward": 0.286638
+  },
+  {
+   "case_id": "ycb_008_pudding_box.v004__it000057__q9063__s3",
+   "shape": "ycb_008_pudding_box.v004",
+   "yaw_bin": 2,
+   "iteration": 43,
+   "mean_failed_reward": 0.387747
+  },
+  {
+   "case_id": "torus.v003__it000054__q4297__s3",
+   "shape": "torus.v003",
+   "yaw_bin": 0,
+   "iteration": 21,
+   "mean_failed_reward": 0.41315
+  },
+  {
+   "case_id": "ycb_052_extra_large_clamp.v006__it000058__q10020__s3",
+   "shape": "ycb_052_extra_large_clamp.v006",
+   "yaw_bin": 7,
+   "iteration": 0,
+   "mean_failed_reward": 0.375806
+  },
+  {
+   "case_id": "bracket.v005__it000056__q7740__s3",
+   "shape": "bracket.v005",
+   "yaw_bin": 6,
+   "iteration": 82,
+   "mean_failed_reward": 0.388271
+  },
+  {
+   "case_id": "ycb_053_mini_soccer_ball.v007__it000051__q431__s3",
+   "shape": "ycb_053_mini_soccer_ball.v007",
+   "yaw_bin": 7,
+   "iteration": 62,
+   "mean_failed_reward": 0.555897
+  },
+  {
+   "case_id": "ycb_008_pudding_box.v002__it000053__q3990__s3",
+   "shape": "ycb_008_pudding_box.v002",
+   "yaw_bin": 6,
+   "iteration": 20,
+   "mean_failed_reward": 0.301677
+  },
+  {
+   "case_id": "ycb_024_bowl.v004__it000059__q11143__s3",
+   "shape": "ycb_024_bowl.v004",
+   "yaw_bin": 4,
+   "iteration": 70,
+   "mean_failed_reward": 0.2846
+  },
+  {
+   "case_id": "ycb_071_nine_hole_peg_test.v007__it000051__q186__s3",
+   "shape": "ycb_071_nine_hole_peg_test.v007",
+   "yaw_bin": 0,
+   "iteration": 0,
+   "mean_failed_reward": 0.513079
+  },
+  {
+   "case_id": "torus.v003__it000056__q8096__s3",
+   "shape": "torus.v003",
+   "yaw_bin": 6,
+   "iteration": 0,
+   "mean_failed_reward": 0.415113
+  },
+  {
+   "case_id": "ycb_026_sponge__it000051__q738__s3",
+   "shape": "ycb_026_sponge",
+   "yaw_bin": 1,
+   "iteration": 0,
+   "mean_failed_reward": 0.228858
+  }
+ ],
+ "note": "v2 failure cases: at most 1 lift in 6 noise-free attempts across the 3 RL-only policies; iteration is rewritten as the VR display order (families in turn)"
+}

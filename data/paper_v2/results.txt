@@ -1,0 +1,5 @@
+20:33 eval graspnet: flat 109/198 tilted 99/197
+20:56 eval graspnet_filtered: flat 126/196 tilted 98/199
+02:38 eval A_s2: flat 156/197 tilted 157/197
+02:38 eval A_s1: flat 163/198 tilted 159/199
+05:50 eval A_s3: flat 168/197 tilted 159/198

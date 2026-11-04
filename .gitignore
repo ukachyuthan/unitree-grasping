@@ -74,3 +74,24 @@ Thumbs.db
 
 # misc
 .npz
+# Generated experiment output (regenerable; only the paper inputs and results below are tracked)
+data/objects_v2/
+data/human_prior/
+data/paper/
+data/paper_v2/curve/
+data/paper_v2/eval/
+data/paper_v2/logs/
+data/paper_v2/analysis/
+data/pose_transfer*/
+data/pt_*/
+data/repaired_*/
+data/v2_sanity/
+data/vr_failures_v2*/
+data/vr_pool_v2/
+data/vr_round2/
+data/vr_round3_control/
+data/vr_round3_no_training/
+data/vr_round3/round3/demos/
+data/vr_round3/round3/objects/
+data/vr_round3/round3/eval_grasp_pose_envs256_20261104_061340_*
+data/vr_round3/round3/eval_grasp_6dof_*

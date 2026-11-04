@@ -1,0 +1,531 @@
+{
+ "checkpoint": "data/grasp_logs/paper_v2/A_s3/grasp_pose_envs256_20261103_023935/grasp_pose_75.pt",
+ "success_rate": {
+  "heldout": 0.29577464788732394,
+  "demo": 0.17796610169491525
+ },
+ "exec_noise": false,
+ "repeats": 2,
+ "cases": {
+  "bracket.v004__it000051__q436__s3": [
+   false,
+   false
+  ],
+  "bracket.v005__it000051__q306__s3": [
+   true,
+   false
+  ],
+  "bracket.v005__it000056__q7740__s3": [
+   false,
+   true
+  ],
+  "c_shape.v001__it000051__q182__s3": [
+   false,
+   false
+  ],
+  "c_shape.v001__it000053__q3637__s1": [
+   false,
+   true
+  ],
+  "c_shape.v001__it000055__q6312__s1": [
+   false,
+   false
+  ],
+  "c_shape.v002__it000051__q294__s3": [
+   true,
+   false
+  ],
+  "c_shape.v002__it000053__q3030__s2": [
+   false,
+   false
+  ],
+  "c_shape.v003__it000051__q47__s3": [
+   true,
+   false
+  ],
+  "c_shape.v005__it000054__q5099__s1": [
+   false,
+   false
+  ],
+  "irregular_ext.v007__it000051__q634__s2": [
+   false,
+   true
+  ],
+  "l_shape.v005__it000051__q267__s2": [
+   true,
+   false
+  ],
+  "star_prism.v007__it000051__q1306__s2": [
+   true,
+   true
+  ],
+  "star_prism.v007__it000053__q4034__s2": [
+   true,
+   false
+  ],
+  "stepped_cyl.v004__it000056__q7931__s3": [
+   false,
+   false
+  ],
+  "t_shape.v003__it000054__q4501__s3": [
+   false,
+   false
+  ],
+  "t_shape__it000052__q2522__s1": [
+   true,
+   false
+  ],
+  "torus.v003__it000051__q289__s1": [
+   false,
+   false
+  ],
+  "torus.v003__it000051__q314__s3": [
+   false,
+   false
+  ],
+  "torus.v003__it000054__q4297__s3": [
+   false,
+   false
+  ],
+  "torus.v003__it000054__q4816__s2": [
+   false,
+   false
+  ],
+  "torus.v003__it000056__q8096__s3": [
+   false,
+   false
+  ],
+  "torus.v003__it000057__q9412__s2": [
+   false,
+   false
+  ],
+  "torus.v003__it000058__q10148__s1": [
+   false,
+   false
+  ],
+  "torus.v006__it000051__q390__s3": [
+   false,
+   false
+  ],
+  "torus.v006__it000051__q830__s1": [
+   false,
+   false
+  ],
+  "torus.v006__it000052__q2020__s1": [
+   false,
+   false
+  ],
+  "torus.v006__it000052__q2122__s3": [
+   false,
+   false
+  ],
+  "torus.v006__it000053__q3318__s1": [
+   false,
+   false
+  ],
+  "torus.v006__it000053__q4190__s2": [
+   false,
+   false
+  ],
+  "torus.v006__it000056__q7268__s3": [
+   false,
+   true
+  ],
+  "torus.v006__it000056__q7547__s2": [
+   false,
+   false
+  ],
+  "torus.v006__it000057__q8763__s1": [
+   true,
+   true
+  ],
+  "torus__it000051__q217__s3": [
+   true,
+   true
+  ],
+  "wedge.v003__it000054__q5245__s3": [
+   false,
+   false
+  ],
+  "ycb_008_pudding_box.v002__it000051__q228__s3": [
+   false,
+   false
+  ],
+  "ycb_008_pudding_box.v002__it000051__q320__s2": [
+   false,
+   true
+  ],
+  "ycb_008_pudding_box.v002__it000051__q414__s3": [
+   false,
+   true
+  ],
+  "ycb_008_pudding_box.v002__it000052__q1950__s2": [
+   false,
+   false
+  ],
+  "ycb_008_pudding_box.v002__it000052__q2418__s2": [
+   false,
+   false
+  ],
+  "ycb_008_pudding_box.v002__it000053__q3720__s1": [
+   false,
+   false
+  ],
+  "ycb_008_pudding_box.v002__it000055__q6314__s3": [
+   false,
+   false
+  ],
+  "ycb_008_pudding_box.v003__it000051__q332__s2": [
+   false,
+   false
+  ],
+  "ycb_008_pudding_box.v003__it000051__q410__s3": [
+   true,
+   true
+  ],
+  "ycb_008_pudding_box.v004__it000052__q1635__s1": [
+   true,
+   true
+  ],
+  "ycb_008_pudding_box.v004__it000056__q7927__s3": [
+   false,
+   false
+  ],
+  "ycb_008_pudding_box.v004__it000057__q9063__s3": [
+   false,
+   false
+  ],
+  "ycb_008_pudding_box.v005__it000051__q288__s1": [
+   false,
+   false
+  ],
+  "ycb_008_pudding_box.v005__it000052__q1486__s3": [
+   false,
+   false
+  ],
+  "ycb_008_pudding_box.v005__it000053__q4068__s3": [
+   false,
+   false
+  ],
+  "ycb_008_pudding_box.v006__it000051__q293__s3": [
+   false,
+   false
+  ],
+  "ycb_008_pudding_box.v006__it000056__q7211__s1": [
+   true,
+   true
+  ],
+  "ycb_009_gelatin_box.v001__it000051__q469__s2": [
+   true,
+   true
+  ],
+  "ycb_009_gelatin_box.v007__it000051__q111__s1": [
+   false,
+   true
+  ],
+  "ycb_009_gelatin_box.v007__it000051__q1336__s3": [
+   false,
+   false
+  ],
+  "ycb_009_gelatin_box.v007__it000055__q5621__s3": [
+   false,
+   false
+  ],
+  "ycb_010_potted_meat_can.v001__it000051__q265__s3": [
+   false,
+   false
+  ],
+  "ycb_010_potted_meat_can.v005__it000054__q4733__s2": [
+   false,
+   true
+  ],
+  "ycb_024_bowl.v001__it000053__q3153__s2": [
+   false,
+   false
+  ],
+  "ycb_024_bowl.v003__it000055__q5975__s3": [
+   false,
+   false
+  ],
+  "ycb_024_bowl.v003__it000056__q7128__s3": [
+   false,
+   true
+  ],
+  "ycb_024_bowl.v004__it000054__q5013__s1": [
+   false,
+   false
+  ],
+  "ycb_024_bowl.v004__it000059__q11143__s3": [
+   false,
+   false
+  ],
+  "ycb_024_bowl__it000052__q1625__s3": [
+   true,
+   true
+  ],
+  "ycb_025_mug.v003__it000051__q1098__s2": [
+   true,
+   false
+  ],
+  "ycb_026_sponge.v001__it000051__q511__s3": [
+   true,
+   false
+  ],
+  "ycb_026_sponge.v001__it000051__q97__s1": [
+   false,
+   false
+  ],
+  "ycb_026_sponge.v001__it000052__q2406__s2": [
+   true,
+   false
+  ],
+  "ycb_026_sponge.v002__it000051__q138__s3": [
+   false,
+   false
+  ],
+  "ycb_026_sponge.v002__it000052__q2194__s3": [
+   false,
+   false
+  ],
+  "ycb_026_sponge.v002__it000053__q3521__s2": [
+   false,
+   false
+  ],
+  "ycb_026_sponge.v002__it000053__q4202__s1": [
+   false,
+   true
+  ],
+  "ycb_026_sponge.v003__it000051__q249__s1": [
+   true,
+   true
+  ],
+  "ycb_026_sponge.v005__it000051__q199__s2": [
+   false,
+   false
+  ],
+  "ycb_026_sponge.v006__it000051__q354__s1": [
+   false,
+   false
+  ],
+  "ycb_026_sponge.v006__it000051__q753__s1": [
+   false,
+   false
+  ],
+  "ycb_026_sponge.v006__it000056__q7885__s2": [
+   false,
+   false
+  ],
+  "ycb_026_sponge__it000051__q738__s3": [
+   true,
+   false
+  ],
+  "ycb_028_skillet_lid.v001__it000053__q3577__s2": [
+   true,
+   false
+  ],
+  "ycb_028_skillet_lid.v005__it000052__q2582__s1": [
+   false,
+   false
+  ],
+  "ycb_028_skillet_lid.v005__it000053__q3338__s3": [
+   false,
+   false
+  ],
+  "ycb_028_skillet_lid.v005__it000053__q3417__s3": [
+   false,
+   false
+  ],
+  "ycb_028_skillet_lid.v005__it000054__q4944__s1": [
+   true,
+   true
+  ],
+  "ycb_028_skillet_lid.v005__it000054__q4969__s3": [
+   false,
+   false
+  ],
+  "ycb_028_skillet_lid.v005__it000056__q8029__s2": [
+   false,
+   false
+  ],
+  "ycb_028_skillet_lid.v006__it000051__q132__s1": [
+   true,
+   true
+  ],
+  "ycb_028_skillet_lid.v006__it000052__q2009__s1": [
+   false,
+   false
+  ],
+  "ycb_028_skillet_lid.v006__it000054__q5440__s2": [
+   true,
+   true
+  ],
+  "ycb_028_skillet_lid.v006__it000058__q10220__s1": [
+   true,
+   true
+  ],
+  "ycb_028_skillet_lid.v007__it000051__q119__s3": [
+   false,
+   false
+  ],
+  "ycb_030_fork.v001__it000051__q1109__s1": [
+   false,
+   false
+  ],
+  "ycb_030_fork.v001__it000051__q479__s3": [
+   false,
+   false
+  ],
+  "ycb_030_fork.v001__it000051__q884__s3": [
+   false,
+   false
+  ],
+  "ycb_030_fork.v001__it000056__q7527__s1": [
+   true,
+   true
+  ],
+  "ycb_030_fork.v001__it000057__q8958__s1": [
+   false,
+   true
+  ],
+  "ycb_030_fork.v003__it000051__q337__s2": [
+   false,
+   false
+  ],
+  "ycb_030_fork.v003__it000051__q345__s2": [
+   false,
+   true
+  ],
+  "ycb_030_fork.v003__it000051__q76__s2": [
+   true,
+   false
+  ],
+  "ycb_030_fork.v003__it000052__q1637__s3": [
+   false,
+   false
+  ],
+  "ycb_030_fork.v003__it000053__q3322__s1": [
+   false,
+   false
+  ],
+  "ycb_037_scissors.v004__it000051__q527__s1": [
+   false,
+   false
+  ],
+  "ycb_037_scissors.v004__it000053__q3535__s3": [
+   false,
+   false
+  ],
+  "ycb_037_scissors__it000051__q270__s2": [
+   false,
+   false
+  ],
+  "ycb_037_scissors__it000054__q4604__s2": [
+   false,
+   false
+  ],
+  "ycb_042_adjustable_wrench.v001__it000051__q253__s1": [
+   false,
+   false
+  ],
+  "ycb_042_adjustable_wrench.v001__it000051__q492__s1": [
+   false,
+   true
+  ],
+  "ycb_052_extra_large_clamp.v002__it000051__q1451__s2": [
+   false,
+   false
+  ],
+  "ycb_052_extra_large_clamp.v003__it000053__q3391__s1": [
+   false,
+   false
+  ],
+  "ycb_052_extra_large_clamp.v003__it000055__q5721__s3": [
+   false,
+   false
+  ],
+  "ycb_052_extra_large_clamp.v004__it000051__q158__s2": [
+   false,
+   false
+  ],
+  "ycb_052_extra_large_clamp.v004__it000051__q377__s3": [
+   false,
+   false
+  ],
+  "ycb_052_extra_large_clamp.v005__it000051__q281__s2": [
+   false,
+   false
+  ],
+  "ycb_052_extra_large_clamp.v006__it000052__q2840__s1": [
+   false,
+   false
+  ],
+  "ycb_052_extra_large_clamp.v006__it000055__q6215__s1": [
+   false,
+   false
+  ],
+  "ycb_052_extra_large_clamp.v006__it000058__q10020__s3": [
+   false,
+   false
+  ],
+  "ycb_052_extra_large_clamp__it000051__q182__s1": [
+   false,
+   false
+  ],
+  "ycb_052_extra_large_clamp__it000051__q568__s3": [
+   false,
+   false
+  ],
+  "ycb_052_extra_large_clamp__it000056__q7868__s1": [
+   false,
+   true
+  ],
+  "ycb_053_mini_soccer_ball.v007__it000051__q1325__s3": [
+   true,
+   true
+  ],
+  "ycb_070-a_colored_wood_blocks__it000051__q142__s3": [
+   true,
+   false
+  ],
+  "ycb_071_nine_hole_peg_test.v002__it000055__q6364__s2": [
+   false,
+   true
+  ],
+  "ycb_071_nine_hole_peg_test.v003__it000051__q985__s1": [
+   true,
+   true
+  ],
+  "ycb_071_nine_hole_peg_test.v003__it000054__q5427__s2": [
+   false,
+   false
+  ],
+  "ycb_071_nine_hole_peg_test.v004__it000051__q50__s2": [
+   false,
+   true
+  ],
+  "ycb_071_nine_hole_peg_test.v004__it000053__q3957__s1": [
+   false,
+   false
+  ],
+  "ycb_071_nine_hole_peg_test.v005__it000057__q9410__s1": [
+   true,
+   false
+  ],
+  "ycb_071_nine_hole_peg_test.v006__it000055__q5986__s2": [
+   false,
+   false
+  ],
+  "ycb_071_nine_hole_peg_test.v007__it000051__q186__s3": [
+   false,
+   false
+  ],
+  "ycb_071_nine_hole_peg_test.v007__it000054__q4640__s2": [
+   false,
+   true
+  ],
+  "ycb_073-a_lego_duplo.v005__it000051__q699__s2": [
+   false,
+   false
+  ]
+ }
+}
