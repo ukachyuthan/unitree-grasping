@@ -160,6 +160,21 @@ class GraspPoseEnv(DirectRLEnv):
                   f"<inst>_graspnet.json — graspnet reward term is 0 for those until "
                   f"scripts/generate_graspnet_labels.py is run.")
 
+        # ── Human grasp prior (scripts/train_human_prior.py), aligned with _obj_pcs ──
+        self._obj_human_prior = None
+        if self.cfg.human_prior_path:
+            prior = np.load(self.cfg.human_prior_path)
+            index = {str(n): i for i, n in enumerate(prior["names"])}
+            missing = [n for n in self._shape_names if n not in index]
+            scores = np.zeros((len(self._shape_names), _PC_PRE_N), dtype=np.float32)
+            for i, n in enumerate(self._shape_names):
+                if n in index:
+                    scores[i] = prior["scores"][index[n]]
+            self._obj_human_prior = torch.tensor(scores, device=self.device)   # (NUM_SHAPES, 512)
+            if missing:
+                print(f"[GraspPoseEnv] WARNING: human prior has no scores for {len(missing)} shapes "
+                      f"(e.g. {missing[:3]}); their bonus is 0.")
+
         # ── Per-env state ──────────────────────────────────────────────────────
         B = self.num_envs
         self._env_shape    = torch.zeros(B, dtype=torch.long, device=self.device)
@@ -189,6 +204,7 @@ class GraspPoseEnv(DirectRLEnv):
         self._last_contact_reward  = torch.zeros(B, device=self.device)
         self._last_place_reward    = torch.zeros(B, device=self.device)
         self._last_graspnet_reward = torch.zeros(B, device=self.device)
+        self._last_human_prior_reward = torch.zeros(B, device=self.device)
         self._last_surface_contact_reward = torch.zeros(B, device=self.device)
         # Peak object z during lift+hold phases — used for lift reward in place mode
         # so we don't measure height AFTER the arm has lowered the object to the goal.
@@ -2938,6 +2954,19 @@ class GraspPoseEnv(DirectRLEnv):
         weight = torch.exp(-dist / self.cfg.graspnet_reward_radius_m)
         return (weight * quality).max(dim=-1).values
 
+    def _human_prior_reward(self) -> torch.Tensor:
+        """Mean human-prior score at the two chosen contacts, each read off the
+        nearby cloud points with a distance decay (scores are max-1 per shape)."""
+        pc = self._obj_pcs[self._env_shape]                # (B, 512, 3) object-local, scaled
+        score = self._obj_human_prior[self._env_shape]     # (B, 512)
+        r = self.cfg.human_prior_radius_m
+
+        def at(c):
+            d = (pc - c.unsqueeze(1)).norm(dim=-1)
+            return (score * torch.exp(-d / r)).max(dim=-1).values
+
+        return 0.5 * (at(self._contact_left_local) + at(self._contact_right_local))
+
     def _get_rewards(self) -> torch.Tensor:
         # Lift reward: peak object height during lift+hold (tracked in _apply_action),
         # so it's unaffected by the arm lowering the object during pick-and-place.
@@ -2961,6 +2990,11 @@ class GraspPoseEnv(DirectRLEnv):
         else:
             graspnet_r = torch.zeros(self.num_envs, device=self.device)
 
+        if self._obj_human_prior is not None:
+            human_r = self._human_prior_reward()
+        else:
+            human_r = torch.zeros(self.num_envs, device=self.device)
+
         surface_r = (
             self._last_surface_contact_reward
             if self.cfg.two_point_grasp
@@ -2974,6 +3008,7 @@ class GraspPoseEnv(DirectRLEnv):
         self._last_contact_reward  = contact_r
         self._last_place_reward    = place_r
         self._last_graspnet_reward = graspnet_r
+        self._last_human_prior_reward = human_r
         self._last_leg_still       = leg_still
 
         w_lift     = self.cfg.lift_reward_weight
@@ -2984,6 +3019,7 @@ class GraspPoseEnv(DirectRLEnv):
         return (
             w_lift * lift_r + w_contact * contact_r + w_place * place_r
             + w_graspnet * graspnet_r + w_surface * surface_r
+            + self.cfg.human_prior_scale * human_r
         )
 
     # ── Dones ─────────────────────────────────────────────────────────────────

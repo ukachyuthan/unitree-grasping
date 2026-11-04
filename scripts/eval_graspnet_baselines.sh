@@ -4,8 +4,8 @@
 source ~/miniconda3/etc/profile.d/conda.sh && conda activate unitree_isaaclab
 export ACCEPT_EULA=Y OMNI_KIT_ACCEPT_EULA=yes
 cd ~/unitree-grasping/wrappers/isaaclab
-OUT=../../data/paper; mkdir -p $OUT/eval
-for a in graspnet graspnet_filtered; do
+OUT=${PAPER_OUT:-../../data/paper}; mkdir -p $OUT/eval
+for a in ${BASELINES:-graspnet graspnet_filtered}; do
   python scripts/play_grasp_pose.py --headless --num_envs 1 --num_episodes 200 --eval_objects --seed 31 \
     --debug_action $a --no_exec_noise > $OUT/eval/${a}_flat.log 2>&1
   python scripts/play_grasp_pose.py --headless --num_envs 1 --num_episodes 200 --eval_objects --seed 32 \

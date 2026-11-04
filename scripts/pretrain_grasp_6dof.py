@@ -45,7 +45,8 @@ from envs.six_dof_geometry import approach_from_jaw               # noqa: E402
 # Must match GraspPoseEnvCfg (grasp_pose_env_cfg.py).
 OBJECT_SCALE = 1.5
 NUM_PC_POINTS = 128
-BOUNDS = ((-0.07, 0.07), (-0.07, 0.07), (-0.07, 0.07))   # grasp_{x,y,z}_bounds
+_B = float(os.environ.get("GRASP_CONTACT_BOUND_M", 0.07))   # as grasp_pose_env_cfg.CONTACT_BOUND_M
+BOUNDS = ((-_B, _B), (-_B, _B), (-_B, _B))   # grasp_{x,y,z}_bounds
 MAX_TILT = math.pi / 2                                   # six_dof_max_tilt_rad
 PC_NOISE_M = (0.0, 0.005)
 PC_DROPOUT = (0.0, 0.10)

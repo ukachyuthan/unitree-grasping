@@ -71,8 +71,37 @@ def find_mesh_file(root: str) -> str | None:
     return None
 
 
-def load_and_prepare(mesh_path: str) -> trimesh.Trimesh | None:
-    """Load a raw real-world mesh, repair it into a usable rigid-body volume."""
+def decimate(mesh: trimesh.Trimesh, n_faces: int) -> trimesh.Trimesh:
+    """Quadric decimation via Open3D (trimesh's needs fast_simplification)."""
+    import open3d as o3d
+    o = o3d.geometry.TriangleMesh(o3d.utility.Vector3dVector(mesh.vertices), o3d.utility.Vector3iVector(mesh.faces))
+    o = o.simplify_quadric_decimation(target_number_of_triangles=n_faces)
+    o.remove_degenerate_triangles()
+    o.remove_duplicated_vertices()
+    o.remove_non_manifold_edges()
+    return trimesh.Trimesh(np.asarray(o.vertices), np.asarray(o.triangles), process=True)
+
+
+def voxel_remesh(mesh: trimesh.Trimesh, pitch: float) -> trimesh.Trimesh | None:
+    """Watertight volume of a non-manifold scan that keeps its concavities (a
+    bowl stays a bowl): voxelize the surface at `pitch`, fill enclosed space,
+    marching cubes. Needs scikit-image."""
+    try:
+        vg = mesh.voxelized(pitch).fill()
+        out = vg.marching_cubes
+        out.apply_transform(vg.transform)
+    except Exception:
+        return None
+    if len(out.faces) > DECIMATE_MAX_FACES:
+        out = decimate(out, DECIMATE_MAX_FACES)
+    out.apply_translation(-out.centroid)
+    return out if out.is_watertight and out.is_volume else None
+
+
+def load_and_prepare(mesh_path: str, keep_concave: bool = False, pitch: float = 0.002) -> trimesh.Trimesh | None:
+    """Load a raw real-world mesh, repair it into a usable rigid-body volume.
+    keep_concave: repair by voxel remeshing instead of falling back to the
+    convex hull (which fills bowls and mugs solid)."""
     try:
         mesh = trimesh.load(mesh_path, process=True, force="mesh")
     except Exception:
@@ -81,6 +110,9 @@ def load_and_prepare(mesh_path: str) -> trimesh.Trimesh | None:
         return None
 
     mesh.apply_translation(-mesh.centroid)
+
+    if keep_concave and not mesh.is_watertight:
+        return voxel_remesh(mesh, pitch)
 
     if len(mesh.faces) > DECIMATE_MAX_FACES:
         try:
@@ -198,10 +230,20 @@ def anisotropic_jitter(mesh: trimesh.Trimesh, rng: random.Random, frac: float = 
     return mesh
 
 
+def real_scale(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
+    """The object at its real size (YCB meshes are in metres), pre-compensating
+    the env's OBJECT_SCALE multiplier."""
+    mesh = mesh.copy()
+    mesh.apply_translation(-mesh.centroid)
+    mesh.apply_scale(1.0 / OBJECT_SCALE)
+    return mesh
+
+
 def make_family_instances(
     base_mesh: trimesh.Trimesh, n_per_family: int, rng: random.Random, np_rng: np.random.Generator,
+    keep_real_size: bool = False,
 ) -> list[trimesh.Trimesh]:
-    instance0 = size_normalize(base_mesh, rng)
+    instance0 = real_scale(base_mesh) if keep_real_size else size_normalize(base_mesh, rng)
     if instance0 is None:
         return []
     instances = [instance0]
@@ -227,7 +269,25 @@ def main():
     p.add_argument("--seed",         type=int, default=0)
     p.add_argument("--grasp_candidates", type=int, default=600)
     p.add_argument("--min_grasps",   type=int, default=MIN_GRASPS)
+    p.add_argument("--real_scale",   action="store_true",
+                   help="Keep each object's real size instead of rescaling it into [MIN_DIM, MAX_DIM].")
+    p.add_argument("--keep_concave", action="store_true",
+                   help="Repair non-watertight scans by voxel remeshing (keeps bowls hollow) "
+                        "instead of taking the convex hull.")
+    p.add_argument("--voxel_pitch",  type=float, default=0.002, help="--keep_concave voxel size (m).")
+    p.add_argument("--max_extent",   type=float, default=0.0,
+                   help="With --real_scale: skip families whose largest real extent exceeds this (m); 0 = keep all.")
+    p.add_argument("--split_from",   type=str, default=None,
+                   help="Root with train/ and eval/ family folders whose split to reuse "
+                        "(e.g. data/objects), so results stay comparable family by family.")
     args = p.parse_args()
+
+    prior_split = {}
+    if args.split_from:
+        for split, out in (("train", args.out), ("eval", args.eval_out)):
+            d = os.path.join(args.split_from, split)
+            for fam in (os.listdir(d) if os.path.isdir(d) else []):
+                prior_split[fam] = out
 
     rng    = random.Random(args.seed)
     np_rng = np.random.default_rng(args.seed)
@@ -255,22 +315,35 @@ def main():
             print(f"  [{fi+1:3d}/{len(raw_names)}] {raw_name}: no mesh file found, skipping")
             continue
 
-        base_mesh = load_and_prepare(mesh_file)
+        base_mesh = load_and_prepare(mesh_file, args.keep_concave, args.voxel_pitch)
         if base_mesh is None:
             print(f"  [{fi+1:3d}/{len(raw_names)}] {raw_name}: failed to load/repair, skipping")
             continue
+        if args.real_scale and args.max_extent and max(base_mesh.extents) > args.max_extent:
+            print(f"  [{fi+1:3d}/{len(raw_names)}] {raw_name}: {max(base_mesh.extents) * 100:.0f} cm, "
+                  f"over --max_extent, skipping")
+            continue
 
-        instances = make_family_instances(base_mesh, args.n_per_family, rng, np_rng)
+        instances = make_family_instances(base_mesh, args.n_per_family, rng, np_rng, args.real_scale)
         if not instances:
             print(f"  [{fi+1:3d}/{len(raw_names)}] {raw_name}: normalization failed, skipping")
             continue
 
-        split_out = args.eval_out if rng.random() < args.eval_frac else args.out
+        split_draw = rng.random()
+        if args.split_from:
+            if family_name not in prior_split:
+                print(f"  [{fi+1:3d}/{len(raw_names)}] {raw_name}: not in --split_from, skipping")
+                continue
+            split_out = prior_split[family_name]
+        else:
+            split_out = args.eval_out if split_draw < args.eval_frac else args.out
         family_dir = os.path.join(split_out, family_name)
 
         kept = 0
         for inst_idx, mesh in enumerate(instances):
-            grasps = compute_antipodal_grasps(mesh, n_candidates=args.grasp_candidates, gripper_w=GRIPPER_MAX_W)
+            # The mesh is stored pre-shrunk by OBJECT_SCALE; the jaw limit applies to the spawned size.
+            gripper_w = GRIPPER_MAX_W / OBJECT_SCALE if args.real_scale else GRIPPER_MAX_W
+            grasps = compute_antipodal_grasps(mesh, n_candidates=args.grasp_candidates, gripper_w=gripper_w)
             if len(grasps) < args.min_grasps:
                 continue
 

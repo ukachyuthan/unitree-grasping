@@ -13,6 +13,7 @@ from __future__ import annotations
 import colorsys
 import hashlib
 import math
+import os
 from pathlib import Path
 
 import isaaclab.sim as sim_utils
@@ -37,6 +38,8 @@ OBS_DIM: int       = NUM_PC_POINTS * 3   # 384
 
 # Panda hand max opening ≈ 8 cm — keep objects graspable at this scale.
 OBJECT_SCALE: float = 1.5
+# Half-range of the policy's contact points around the object centroid (m).
+CONTACT_BOUND_M: float = float(os.environ.get("GRASP_CONTACT_BOUND_M", 0.07))
 OBJECT_MASS: float = 0.20
 
 # ── Execution phases (in physics steps, total = decimation) ──────────────────
@@ -262,9 +265,11 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
 
     # ── Workspace bounds for action de-normalization ──────────────────────────
     # Path A peak (~72%) used ±0.07. Tighter ±0.05/±0.04 was for 2-point PC projection.
-    grasp_x_bounds: tuple = (-0.07, 0.07)
-    grasp_y_bounds: tuple = (-0.07, 0.07)
-    grasp_z_bounds: tuple = (-0.07, 0.07)
+    # GRASP_CONTACT_BOUND_M overrides the half-range (data/objects_v2 needs 0.12: at
+    # 0.07, 29 real-size objects had no reachable GraspNet grasp).
+    grasp_x_bounds: tuple = (-CONTACT_BOUND_M, CONTACT_BOUND_M)
+    grasp_y_bounds: tuple = (-CONTACT_BOUND_M, CONTACT_BOUND_M)
+    grasp_z_bounds: tuple = (-CONTACT_BOUND_M, CONTACT_BOUND_M)
     # panda_joint5 tilt range: 0.0 = neutral (top-down), ±1.5 rad = ~85° tilt
     grasp_tilt_bounds: tuple = (-1.5, 1.5)
     # panda_joint7 roll range: full rotation of the jaw plane
@@ -296,8 +301,9 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
     # Floating hand: raise the executed grasp so the open fingertips stay this far
     # above the table (pad centre is ~1 cm short of the tip, so low objects —
     # knives, markers, lying bottles — otherwise jam the fingers into the table).
-    # None disables it.
-    six_dof_table_clearance_m: float | None = 0.003
+    # None disables it. GRASP_TABLE_CLEARANCE_M overrides (0 = the fingertips may touch
+    # and slide along the table, as a real gripper picking up something flat does).
+    six_dof_table_clearance_m: float | None = float(os.environ.get("GRASP_TABLE_CLEARANCE_M", 0.003))
     six_dof_hover_m: float = 0.08               # first half of approach: pre-grasp + this up
     six_dof_ik_lambda: float = 0.05             # DLS damping
     six_dof_rot_weight: float = 0.3             # m per rad: orientation vs position in the IK
@@ -517,6 +523,13 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
     use_graspnet_reward: bool = True
     graspnet_reward_scale: float = 1.0
     graspnet_reward_radius_m: float = 0.03   # distance-decay radius for the quality bonus
+
+    # ── Human grasp prior reward (scripts/train_human_prior.py) ───────────────
+    # Per-point "would a human grasp here" scores for every shape, learned from the
+    # VR demos; the bonus is the score at the policy's two contacts. None = off.
+    human_prior_path: str | None = None
+    human_prior_scale: float = 0.5
+    human_prior_radius_m: float = 0.005
 
     def __post_init__(self):
         if hasattr(super(), "__post_init__"):

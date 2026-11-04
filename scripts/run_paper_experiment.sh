@@ -77,6 +77,9 @@ wait_transfers() {
   [ -f $OUT/transfers.done ]
 }
 
+# Sourced for the helpers only (scripts/run_lever2.sh).
+[ "${BASH_SOURCE[0]}" != "$0" ] && return
+
 # Baseline and transfers first, alongside A seed 1.
 # (the start policy's evaluation is kept if a previous launch already measured it)
 ( grep -q "eval start_policy:" $OUT/results.txt 2>/dev/null || evaluate start_policy $START; transfers ) &

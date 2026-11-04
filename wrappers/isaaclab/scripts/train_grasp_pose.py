@@ -101,11 +101,25 @@ parser.add_argument("--bc_coef", type=float, default=1.0,
                     help="Weight of the imitation loss on demo episodes.")
 parser.add_argument("--demo_exec_prob", type=float, default=0.0,
                     help="Fraction of demo episodes that execute the demo's own grasp instead of the "
-                         "policy's sample: the verified success enters the PPO batch like any "
-                         "episode, so RL reinforces the demo grasp directly (demo-augmented policy "
-                         "gradient), on top of the imitation loss.")
+                         "policy's sample. They stay out of the PPO surrogate (off-policy); a demo "
+                         "grasp that lifts in its episode is imitated with double weight.")
+parser.add_argument("--bc_decay_iters", type=int, default=0,
+                    help="Fade the imitation weight linearly from --bc_coef to zero over this many "
+                         "iterations (0: constant), so demos bootstrap and RL takes over.")
+parser.add_argument("--bc_filter", action="store_true",
+                    help="Imitate a demo only on demo episodes where the policy's own grasp failed "
+                         "(plus executed demo grasps that lifted), so demos correct failures "
+                         "without pulling the policy off grasps that already work.")
+parser.add_argument("--bc_only_lifted", action="store_true",
+                    help="With --bc_filter and --demo_exec_prob: imitate only executed demo grasps "
+                         "that lifted, never a demo the robot hand has not shown it can execute.")
 parser.add_argument("--bc_psi", action="store_true",
                     help="Also imitate the demo's approach angle (default: contact points only).")
+parser.add_argument("--human_prior", type=str, default=None,
+                    help="prior.npz from scripts/train_human_prior.py: adds a reward for grasping "
+                         "where the learned human-grasp model scores high, on every shape.")
+parser.add_argument("--human_prior_scale", type=float, default=0.5,
+                    help="Weight of the human-prior reward (shaping only; never counts as success).")
 parser.add_argument("--tilted_spawn_prob", type=float, default=0.0,
                     help="Fraction of episodes spawned in an arbitrary 3-D orientation (held as if "
                          "propped until the fingers close) instead of flat on the table.")
@@ -182,6 +196,7 @@ def _episode_outcome(u, rew) -> dict:
             "surface": np_(u._last_surface_contact_reward),
             "place": np_(u._last_place_reward),
             "graspnet": np_(u._last_graspnet_reward),
+            "human_prior": np_(u._last_human_prior_reward),
         },
         "contact_left_local": np_(u._contact_left_local),
         "contact_right_local": np_(u._contact_right_local),
@@ -273,23 +288,38 @@ def demo_imitation_loss(mean, tgt, mask, with_psi=False):
 
 def ppo_update(ac, optimizer, obs, actions, old_logp, returns, advantages,
                clip_param, value_coef, entropy_coef, max_grad_norm,
-               demo_tgt=None, demo_mask=None, bc_coef=0.0):
+               demo_tgt=None, demo_mask=None, bc_coef=0.0, exec_mask=None, exec_success=None):
     ac.act(obs)
     logp = ac.get_actions_log_prob(actions)
     entropy = ac.entropy.mean()
     values = ac.evaluate(obs).squeeze(-1)
 
+    # Executed demo grasps are off-policy: as the policy narrows their log-probability
+    # collapses, and their PPO gradient explodes (it diverged to NaN at iteration ~80,
+    # pushing away from every failed demo). They are learned from by imitation below.
+    on_policy = torch.ones_like(advantages, dtype=torch.bool) if exec_mask is None else ~exec_mask
     ratio = torch.exp(logp - old_logp)
     surr1 = ratio * advantages
     surr2 = torch.clamp(ratio, 1.0 - clip_param, 1.0 + clip_param) * advantages
-    policy_loss = -torch.min(surr1, surr2).mean()
+    policy_loss = -torch.min(surr1, surr2)[on_policy].mean() if on_policy.any() else logp.new_zeros(())
 
     value_loss = 0.5 * (returns - values).pow(2).mean()
     loss = policy_loss + value_coef * value_loss - entropy_coef * entropy
     bc_loss = torch.zeros((), device=obs.device)
     if demo_mask is not None and bc_coef > 0.0:
+        if args.bc_filter and exec_success is not None:
+            # Correct the policy only where its own grasp failed on the demo case; where it
+            # already lifts, RL keeps its grasp.
+            demo_mask = demo_mask & ~exec_success & (on_policy if exec_mask is not None else True)
+            if args.bc_only_lifted:
+                # Only demo grasps the robot itself just lifted with (imitated below).
+                demo_mask = torch.zeros_like(demo_mask)
         bc_loss = demo_imitation_loss(ac.action_mean, demo_tgt, demo_mask, with_psi=args.bc_psi)
         loss = loss + bc_coef * bc_loss
+        if exec_mask is not None:
+            # Demo grasps that just lifted the object in this very episode count twice.
+            loss = loss + bc_coef * demo_imitation_loss(
+                ac.action_mean, demo_tgt, exec_mask & exec_success, with_psi=args.bc_psi)
 
     optimizer.zero_grad()
     loss.backward()
@@ -324,8 +354,8 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
             with torch.no_grad():
                 ac.act(obs)
                 actions = ac.distribution.sample()
-                # Some demo episodes execute the demo's own grasp; its log-probability
-                # under the current policy keeps the PPO ratio consistent.
+                # Some demo episodes execute the demo's own grasp (kept out of the PPO
+                # surrogate, see ppo_update; their successes are imitated).
                 exec_mask = demo_mask & (torch.rand(num_envs, device=device) < demo_exec_prob)
                 if exec_mask.any():
                     actions = torch.where(exec_mask.unsqueeze(-1), demo_tgt, actions)
@@ -381,6 +411,10 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
 
         last_policy_loss = last_value_loss = last_entropy = 0.0
         last_total_loss = last_grad_norm = last_bc_loss = 0.0
+        # Demos bootstrap, then RL takes over: the imitation weight fades linearly to zero.
+        bc_now = bc_coef if demos is not None else 0.0
+        if args.bc_decay_iters:
+            bc_now *= max(0.0, 1.0 - (it - 1) / args.bc_decay_iters)
         for _ in range(num_epochs):
             perm = torch.randperm(batch_size, device=device)
             for start in range(0, batch_size, mini_batch_size):
@@ -391,7 +425,8 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
                     obs_all[idx], act_all[idx], logp_all[idx],
                     returns[idx], advantages[idx],
                     clip_param, value_coef, entropy_coef, max_grad_norm,
-                    demo_tgt_all[idx], demo_mask_all[idx], bc_coef if demos is not None else 0.0,
+                    demo_tgt_all[idx], demo_mask_all[idx], bc_now,
+                    exec_all[idx], success_all[idx] > 0.5,
                 )
 
         mean_rew = rew_all.mean().item()
@@ -413,6 +448,7 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
         mean_place   = u._last_place_reward.mean().item()   if hasattr(u, "_last_place_reward")   else float("nan")
         mean_graspnet = u._last_graspnet_reward.mean().item() if hasattr(u, "_last_graspnet_reward") else float("nan")
         mean_surface = u._last_surface_contact_reward.mean().item() if hasattr(u, "_last_surface_contact_reward") else float("nan")
+        mean_human = u._last_human_prior_reward.mean().item()
 
         stats = {
             "iter": it,
@@ -427,6 +463,7 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
             "mean_place_reward": mean_place,
             "mean_graspnet_reward": mean_graspnet,
             "mean_surface_contact_reward": mean_surface,
+            "mean_human_prior_reward": mean_human,
             "mean_value": mean_value,
             "mean_return": mean_return,
             "mean_advantage": mean_adv,
@@ -465,7 +502,8 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
                 f"reward={mean_rew:.4f}±{std_rew:.4f}  "
                 f"lift={mean_lift:.4f}  contact={mean_contact:.4f}  surface={mean_surface:.4f}  "
                 f"place={mean_place:.4f}  graspnet={mean_graspnet:.4f}  "
-                f"success={success_rate*100:.1f}%  "
+                + (f"human={mean_human:.4f}  " if args.human_prior else "")
+                + f"success={success_rate*100:.1f}%  "
                 f"v_loss={last_value_loss:.4f}  "
                 f"pi_loss={last_policy_loss:.4f}  "
                 f"entropy={last_entropy:.3f}  "
@@ -488,6 +526,7 @@ def train_ppo(env, ac, device, log_dir, max_iters, writer=None, metrics_path=Non
             writer.add_scalar("train/mean_place_reward", mean_place, it)
             writer.add_scalar("train/mean_graspnet_reward", mean_graspnet, it)
             writer.add_scalar("train/mean_surface_contact_reward", mean_surface, it)
+            writer.add_scalar("train/mean_human_prior_reward", mean_human, it)
             writer.add_scalar("train/mean_value", mean_value, it)
             writer.add_scalar("train/mean_return", mean_return, it)
             writer.add_scalar("train/mean_advantage", mean_adv, it)
@@ -565,6 +604,9 @@ def main():
     env_cfg.use_real_objects = args.use_real_objects
     env_cfg.variants_per_family = args.variants_per_family
     env_cfg.tilted_spawn_prob = args.tilted_spawn_prob
+    if args.human_prior:
+        env_cfg.human_prior_path = os.path.abspath(args.human_prior)
+        env_cfg.human_prior_scale = args.human_prior_scale
     env_cfg.grasp_mode = args.grasp_mode
     env_cfg.six_dof_executor = args.executor
     env_cfg.obs_frame = args.obs_frame

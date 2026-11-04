@@ -40,6 +40,9 @@ mode.add_argument("--transfer", type=str,
                   help="Demo root: try each demo's grasp points on the same object in --poses random "
                        "3-D orientations (held in place until the lift, as if propped); every pose "
                        "where they lift is written to --out as a pose-transfer demo.")
+mode.add_argument("--repair", type=str,
+                  help="VR demo root: search robot grasps near each demo's contact points at its exact "
+                       "case (human says where, the sim finds how); lifting ones are written to --out.")
 mode.add_argument("--eval_cases", type=str,
                   help="A failure dataset run dir: run --checkpoint's policy (action mean) on each "
                        "case, --repeats times, and report its success on those cases.")
@@ -58,8 +61,20 @@ parser.add_argument("--variants", action="store_true",
                          "object family (rescaled and snapped onto each variant's surface).")
 parser.add_argument("--repeats", type=int, default=3,
                     help="--eval_cases: attempts per case (the observation noise differs each time).")
+parser.add_argument("--sample_actions", action="store_true",
+                    help="--eval_cases: sample the policy's actions as in training, instead of "
+                         "using its mean (a diagnostic: a mean between grasp modes can fail "
+                         "where samples succeed).")
 parser.add_argument("--exec_noise", action="store_true",
                     help="--eval_cases: keep the env's execution noise (default off).")
+parser.add_argument("--repair_radius", type=float, default=0.02,
+                    help="--repair: candidate contacts lie on the surface within this distance (m) of "
+                         "the demo's.")
+parser.add_argument("--repair_candidates", type=int, default=32,
+                    help="--repair: contact pairs tried per demo (besides the demo's own).")
+parser.add_argument("--repair_unguided", action="store_true",
+                    help="--repair control: draw the candidate pairs from the whole surface, same budget, "
+                         "ignoring where the human grasped.")
 parser.add_argument("--out", type=str, default=None, help="Demo root to write (--cases / --random_cases).")
 parser.add_argument("--top_k", type=int, default=8, help="Contact-GraspNet grasps tried per case.")
 parser.add_argument("--teacher_repeats", type=int, default=2,
@@ -69,8 +84,8 @@ parser.add_argument("--num_envs", type=int, default=64)
 parser.add_argument("--seed", type=int, default=0)
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
-if (args.cases or args.random_cases or args.transfer) and not args.out:
-    parser.error("--out is required with --cases / --random_cases / --transfer")
+if (args.cases or args.random_cases or args.transfer or args.repair) and not args.out:
+    parser.error("--out is required with --cases / --random_cases / --transfer / --repair")
 if args.eval_cases and not args.checkpoint:
     parser.error("--eval_cases needs --checkpoint")
 
@@ -97,7 +112,7 @@ from envs.grasp_pose_env import GraspPoseEnv
 from models.grasp_pose_actor_critic import GraspPoseActorCritic
 from envs._object_registry import shape_asset
 from training.demo_replay import (
-    DEMO_SCHEMA, SOURCE_TEACHER, SOURCE_TRANSFER, impossible_cases, load_demos, psi_from_approach, quat_rotate_wxyz,
+    DEMO_SCHEMA, SOURCE_TEACHER, SOURCE_TRANSFER, SOURCE_VR, impossible_cases, load_demos, psi_from_approach, quat_rotate_wxyz,
 )
 
 
@@ -170,7 +185,8 @@ def run_jobs(env: GraspPoseEnv, jobs: list[dict], shape_index: dict, policy=None
         obs, *_ = env.step(torch.zeros(B, int(env.cfg.action_space), device=env.device))
         if policy is not None:
             with torch.no_grad():
-                env.step(policy.act_inference(obs["policy"]))
+                act = policy.act if args.sample_actions else policy.act_inference
+                env.step(act(obs["policy"]))
             results += env._last_lift_success[:n].cpu().tolist()
             continue
         c1 = torch.zeros(B, 3, device=env.device)
@@ -337,6 +353,127 @@ def transfer_poses(env: GraspPoseEnv, demos, shape_index: dict, rng):
           f"{n_any}/{len(demos)} demos lift somewhere; {cases_any} failure cases covered → {out_root}")
 
 
+def repair_pairs(mesh, c1, c2, rng):
+    """Up to --repair_candidates surface contact pairs a parallel jaw can close on:
+    width within the gripper's range, and each contact's outward normal facing away
+    from the other contact (within 40°). Near the demo's contacts, or anywhere on
+    the surface with --repair_unguided."""
+    import trimesh
+    pts, faces = trimesh.sample.sample_surface(mesh, 6000, seed=int(rng.integers(1 << 31)))
+    nrm = mesh.face_normals[faces]
+    if args.repair_unguided:
+        i1 = i2 = np.arange(len(pts))
+    else:
+        i1 = np.flatnonzero(np.linalg.norm(pts - c1, axis=1) < args.repair_radius)
+        i2 = np.flatnonzero(np.linalg.norm(pts - c2, axis=1) < args.repair_radius)
+    if not len(i1) or not len(i2):
+        return []
+    a, b = rng.choice(i1, 100_000), rng.choice(i2, 100_000)
+    v = pts[b] - pts[a]
+    w = np.linalg.norm(v, axis=1)
+    u = v / np.maximum(w, 1e-9)[:, None]
+    cos40 = math.cos(math.radians(40))
+    lo, hi = GraspPoseEnvCfg().grasp_width_bounds
+    ok = ((w > lo) & (w < hi) & ((nrm[a] * u).sum(1) < -cos40) & ((nrm[b] * u).sum(1) > cos40))
+    a, b = a[ok], b[ok]
+    keep = rng.permutation(len(a))[: args.repair_candidates]
+    return [(pts[a[k]], pts[b[k]]) for k in keep]
+
+
+def repair_demos(env: GraspPoseEnv, demos, shape_index: dict, rng):
+    """Human says where, the sim finds how: for each VR demo, robot grasps near its
+    contacts at its exact case. Pass 1 tries the demo's own contacts and the
+    candidate pairs over the approach grid, without noise. Pass 2 re-runs the 4
+    lifting candidates closest to the demo under training's execution noise; the
+    most robust (then closest) is written, if it lifts at least 2 of 4 times."""
+    demos = [d for d in demos if d.shape in shape_index]
+    scale = float(env.cfg.object_scale)
+    psis = [math.radians(p) for p in (args.psi_grid or DEFAULT_PSI_GRID)]
+    meshes, cands = {}, []
+    for d in demos:
+        if d.shape not in meshes:
+            meshes[d.shape] = _mesh(d.shape, scale)
+        c1, c2 = np.asarray(d.c1_local), np.asarray(d.c2_local)
+        own = [] if args.repair_unguided else [(c1, c2)]
+        pairs = own + repair_pairs(meshes[d.shape], c1, c2, rng)
+        cands.append([(p1, p2, min(np.linalg.norm(p1 - c1) + np.linalg.norm(p2 - c2),
+                                   np.linalg.norm(p1 - c2) + np.linalg.norm(p2 - c1)))
+                      for p1, p2 in pairs])
+    P = len(psis)
+    jobs = [{"shape": d.shape, "pos": d.pos, "quat_wxyz": d.quat_wxyz, "c1": p1, "c2": p2, "psi": p}
+            for d, cs in zip(demos, cands) for p1, p2, _ in cs for p in psis]
+    print(f"[teach] repair{' (unguided)' if args.repair_unguided else ''}: {len(demos)} demos, "
+          f"{sum(map(len, cands))} contact pairs × {P} approaches = {len(jobs)} runs")
+    ok = run_jobs(env, jobs, shape_index)
+
+    # Lifting (pair, ψ) per demo, closest to the human first.
+    lifting, own_lifted, k = [], [], 0
+    for d, cs in zip(demos, cands):
+        own_lifted.append(not args.repair_unguided and any(ok[k : k + P]))
+        found = []
+        for p1, p2, dist in cs:
+            found += [(dist, p1, p2, psi) for psi, s in zip(psis, ok[k : k + P]) if s]
+            k += P
+        found.sort(key=lambda f: f[0])
+        best_per_pair, seen = [], set()
+        for f in found:                                  # one approach per pair
+            key = (tuple(np.round(f[1], 6)), tuple(np.round(f[2], 6)))
+            if key not in seen:
+                seen.add(key)
+                best_per_pair.append(f)
+        lifting.append(best_per_pair[:4])
+
+    R = 4
+    env.cfg.six_dof_exec_noise_pos_m = GraspPoseEnvCfg().six_dof_exec_noise_pos_m
+    env.cfg.six_dof_exec_noise_rot_rad = GraspPoseEnvCfg().six_dof_exec_noise_rot_rad
+    jobs2 = [{"shape": d.shape, "pos": d.pos, "quat_wxyz": d.quat_wxyz, "c1": p1, "c2": p2, "psi": psi}
+             for d, fs in zip(demos, lifting) for _, p1, p2, psi in fs for _ in range(R)]
+    print(f"[teach] repair: robustness pass, {len(jobs2)} runs with execution noise")
+    ok2 = run_jobs(env, jobs2, shape_index) if jobs2 else []
+
+    out_root = Path(args.out)
+    source = "search-unguided" if args.repair_unguided else "human-repaired"
+    summary, k = {}, 0
+    for d, fs, own in zip(demos, lifting, own_lifted):
+        scored = []
+        for dist, p1, p2, psi in fs:
+            scored.append((sum(ok2[k : k + R]), -dist, p1, p2, psi, dist))
+            k += R
+        entry = {"case_id": d.case_id, "shape": d.shape, "own_lifted_any_psi": bool(own),
+                 "pairs_lifting": len(fs), "written": False}
+        if scored:
+            n_ok, _, p1, p2, psi, dist = max(scored, key=lambda s: (s[0], s[1]))
+            entry.update(noisy_lifts=f"{n_ok}/{R}", dist_cm=round(dist * 100, 2))
+            if n_ok >= 2:
+                out = out_root / d.run / "demos" / d.case_id
+                out.mkdir(parents=True, exist_ok=True)
+                (out / f"{source}__{Path(d.path).stem}.json").write_text(json.dumps({
+                    "schema": DEMO_SCHEMA, "run": d.run, "case_id": d.case_id, "shape": d.shape,
+                    "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "source": source, "success": True,
+                    "frame": "robot_base: z-up, metres, quaternions wxyz; grasp contacts object-local (scaled)",
+                    "grasp": {"t": 0.0, "hand": "franka", "mode": "parallel-jaw",
+                              "c1_local": [round(float(v), 6) for v in p1],
+                              "c2_local": [round(float(v), 6) for v in p2],
+                              "psi_rad": round(psi, 6),
+                              "object_pose": {"pos": [float(v) for v in d.pos],
+                                              "quat_wxyz": [float(v) for v in d.quat_wxyz]}},
+                    "repair": {"from": d.path, "from_source": d.source, "dist_from_demo_m": round(dist, 5),
+                               "noisy_lifts": n_ok, "noisy_tries": R, "unguided": bool(args.repair_unguided)},
+                }, indent=1))
+                entry["written"] = True
+        summary[d.path] = entry
+    out_root.mkdir(parents=True, exist_ok=True)
+    (out_root / "repair_summary.json").write_text(json.dumps(
+        {"radius_m": args.repair_radius, "candidates": args.repair_candidates,
+         "unguided": bool(args.repair_unguided), "psi_grid_deg": [round(math.degrees(p)) for p in psis],
+         "demos": summary}, indent=1))
+    n_w = sum(e["written"] for e in summary.values())
+    cases = {e["case_id"] for e in summary.values() if e["written"]}
+    print(f"[teach] repair: {n_w}/{len(demos)} demos repaired (lift ≥2/4 under noise), "
+          f"{len(cases)} failure cases covered → {out_root}")
+
+
 def write_demo(out_root: Path, case: dict, g: dict, tried: int, lifted: list[int]):
     d = out_root / case["run"] / "demos" / case["case_id"]
     d.mkdir(parents=True, exist_ok=True)
@@ -376,7 +513,10 @@ def main():
         cfg.six_dof_exec_noise_pos_m = defaults.six_dof_exec_noise_pos_m
         cfg.six_dof_exec_noise_rot_rad = defaults.six_dof_exec_noise_rot_rad
 
-    if args.verify or args.transfer:
+    if args.repair:
+        demos = load_demos(args.repair, (SOURCE_VR,))
+        cfg.shape_filter = tuple(sorted({d.shape for d in demos}))
+    elif args.verify or args.transfer:
         demos = load_demos(args.verify or args.transfer)
         if args.transfer:
             demos = [d for d in demos if d.source != SOURCE_TRANSFER]
@@ -402,6 +542,10 @@ def main():
 
     if args.transfer:
         transfer_poses(env, demos, shape_index, rng)
+        return
+
+    if args.repair:
+        repair_demos(env, demos, shape_index, rng)
         return
 
     if args.verify and args.record:

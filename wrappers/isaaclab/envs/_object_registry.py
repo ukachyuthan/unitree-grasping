@@ -13,9 +13,14 @@ from __future__ import annotations
 
 import functools
 import json
+import os
 import re
 
 from envs._paths import data_path
+
+# Object set root (train/ and eval/ inside). GRASP_OBJECTS_DIR=data/objects_v2 selects
+# the real-scale, concavity-preserving set (generate_ycb_meshes.py --real_scale --keep_concave).
+OBJECTS_DIR = os.environ.get("GRASP_OBJECTS_DIR", "data/objects")
 
 PROCEDURAL_SHAPE_NAMES: list[str] = [
     "torus", "l_shape", "t_shape", "c_shape", "dumbbell",
@@ -40,7 +45,7 @@ def _ycb_shape_names_cached(split: str) -> tuple[str, ...]:
     fetch_ycb.py / generate_ycb_meshes.py have been run) rather than raising,
     so importing this module never breaks a procedural-only checkout.
     """
-    manifest_path = data_path("data/objects", split, "manifest.json")
+    manifest_path = data_path(OBJECTS_DIR, split, "manifest.json")
     if not manifest_path.exists():
         return ()
     with open(manifest_path) as f:
@@ -48,7 +53,7 @@ def _ycb_shape_names_cached(split: str) -> tuple[str, ...]:
     names = {entry["family"] for entry in manifest if entry["family"].startswith("ycb_")}
     ready = []
     for name in sorted(names):
-        usd = data_path("data/objects", split, name, "000.usd")
+        usd = data_path(OBJECTS_DIR, split, name, "000.usd")
         if usd.exists():
             ready.append(name)
     skipped = sorted(names - set(ready))
@@ -92,7 +97,7 @@ def shape_split(shape_name: str) -> str:
 def shape_asset(shape_name: str, suffix: str):
     """Path of one instance file, e.g. shape_asset('torus.v002', '_pc.npy') → .../torus/002_pc.npy."""
     family, inst = split_variant(shape_name)
-    return data_path("data/objects", shape_split(shape_name), family, f"{inst:03d}{suffix}")
+    return data_path(OBJECTS_DIR, shape_split(shape_name), family, f"{inst:03d}{suffix}")
 
 
 def family_variants(family: str, max_variants: int | None = None) -> list[str]:
@@ -104,7 +109,7 @@ def family_variants(family: str, max_variants: int | None = None) -> list[str]:
     numbering; those are simply skipped.
     """
     split = shape_split(family)
-    family_dir = data_path("data/objects", split, family)
+    family_dir = data_path(OBJECTS_DIR, split, family)
     insts = sorted(
         int(p.stem) for p in family_dir.glob("[0-9][0-9][0-9].usd") if int(p.stem) > 0
     ) if family_dir.is_dir() else []
