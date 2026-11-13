@@ -1,0 +1,1337 @@
+{
+ "scene": "easy",
+ "checkpoint": "data/grasp_logs/paper_v2/A_s2/grasp_pose_envs256_20261102_204435/grasp_pose_final.pt",
+ "seed": 1,
+ "max_tries": 3,
+ "trials": [
+  [
+   {
+    "label": "apple",
+    "shape": "ycb_013_apple",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -63.353016665292245,
+      "width_cm": 7.682859152555466,
+      "mirrored": false,
+      "outward": 0.0089358389377594,
+      "pos_cm": 7.86806046962738,
+      "rot_deg": 6.937900399450206,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -55.07619342907079,
+      "width_cm": 7.04621821641922,
+      "mirrored": false,
+      "outward": 0.06191655993461609,
+      "pos_cm": 2.744063176214695,
+      "rot_deg": 6.709585531630074,
+      "sorted": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -50.03731357644768,
+      "width_cm": 7.764393091201782,
+      "mirrored": false,
+      "outward": 0.22035500407218933,
+      "pos_cm": 0.07801338215358555,
+      "rot_deg": 0.08162786424519346,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "lemon",
+    "shape": "ycb_014_lemon",
+    "category": "citrus",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -24.265204960501393,
+      "width_cm": 5.668069422245026,
+      "mirrored": false,
+      "outward": 0.26281437277793884,
+      "pos_cm": 0.11755026644095778,
+      "rot_deg": 0.15450453527609484,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "banana",
+    "shape": "ycb_011_banana",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -10.74310550777009,
+      "width_cm": 3.652765601873398,
+      "mirrored": false,
+      "outward": 0.2907310426235199,
+      "pos_cm": 0.12891372898593545,
+      "rot_deg": 1.0712192285030024,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "orange",
+    "shape": "ycb_017_orange",
+    "category": "citrus",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -54.50643270888666,
+      "width_cm": 7.394421100616455,
+      "mirrored": false,
+      "outward": 0.29591822624206543,
+      "pos_cm": 0.08118016994558275,
+      "rot_deg": 0.09400515419703503,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "pear",
+    "shape": "ycb_016_pear",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -31.892355970796864,
+      "width_cm": 6.433228403329849,
+      "mirrored": false,
+      "outward": 0.45394307374954224,
+      "pos_cm": 0.11791198048740625,
+      "rot_deg": 0.09110433817197625,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "plum",
+    "shape": "ycb_018_plum",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -24.43744525589619,
+      "width_cm": 5.450339615345001,
+      "mirrored": false,
+      "outward": 0.413064569234848,
+      "pos_cm": 0.21835670340806246,
+      "rot_deg": 0.19331971325669717,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   }
+  ],
+  [
+   {
+    "label": "apple",
+    "shape": "ycb_013_apple",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -67.54306451352826,
+      "width_cm": 7.595659047365189,
+      "mirrored": false,
+      "outward": 0.4069198966026306,
+      "pos_cm": 3.650372102856636,
+      "rot_deg": 6.569595681948785,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -81.95686736051954,
+      "width_cm": 7.900785654783249,
+      "mirrored": false,
+      "outward": 0.5244324803352356,
+      "pos_cm": 0.274883140809834,
+      "rot_deg": 0.33358547856807075,
+      "sorted": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -70.62046088559087,
+      "width_cm": 7.316387444734573,
+      "mirrored": false,
+      "outward": 0.803178071975708,
+      "pos_cm": 0.11713040294125676,
+      "rot_deg": 0.04864453389765809,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "lemon",
+    "shape": "ycb_014_lemon",
+    "category": "citrus",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -19.94515982933981,
+      "width_cm": 5.590914934873581,
+      "mirrored": false,
+      "outward": 0.34012269973754883,
+      "pos_cm": 0.19381634192541242,
+      "rot_deg": 0.1743736489531545,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "banana",
+    "shape": "ycb_011_banana",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 1.6642832734747404,
+      "width_cm": 3.8217011839151382,
+      "mirrored": false,
+      "outward": 0.12558317184448242,
+      "pos_cm": 0.10345279006287456,
+      "rot_deg": 0.10220967214356823,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "orange",
+    "shape": "ycb_017_orange",
+    "category": "citrus",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -42.574717191183446,
+      "width_cm": 7.255201041698456,
+      "mirrored": false,
+      "outward": 0.293750524520874,
+      "pos_cm": 0.08963843574747443,
+      "rot_deg": 0.09170954362524962,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "pear",
+    "shape": "ycb_016_pear",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -15.893676028795836,
+      "width_cm": 6.840904802083969,
+      "mirrored": false,
+      "outward": -0.2005092352628708,
+      "pos_cm": 0.080375891411677,
+      "rot_deg": 0.07649731162124283,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "plum",
+    "shape": "ycb_018_plum",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -30.964693338104073,
+      "width_cm": 5.7364292442798615,
+      "mirrored": false,
+      "outward": 0.5144468545913696,
+      "pos_cm": 0.12438331032171845,
+      "rot_deg": 0.071489315536169,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   }
+  ],
+  [
+   {
+    "label": "apple",
+    "shape": "ycb_013_apple",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -62.006041889263194,
+      "width_cm": 7.6729752123355865,
+      "mirrored": false,
+      "outward": 0.2124474197626114,
+      "pos_cm": 2.4801401421427727,
+      "rot_deg": 2.170568804546114,
+      "sorted": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -51.51127181443101,
+      "width_cm": 7.7215775847435,
+      "mirrored": false,
+      "outward": 0.40975823998451233,
+      "pos_cm": 0.5673037841916084,
+      "rot_deg": 0.5255484254389551,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "lemon",
+    "shape": "ycb_014_lemon",
+    "category": "citrus",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -18.071654307930945,
+      "width_cm": 5.654895678162575,
+      "mirrored": false,
+      "outward": 0.3008652627468109,
+      "pos_cm": 0.10757006239145994,
+      "rot_deg": 0.10585038308470321,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "banana",
+    "shape": "ycb_011_banana",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -10.368773575212957,
+      "width_cm": 4.110212624073029,
+      "mirrored": false,
+      "outward": -0.018819592893123627,
+      "pos_cm": 0.08999969577416778,
+      "rot_deg": 0.10659308611566276,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "orange",
+    "shape": "ycb_017_orange",
+    "category": "citrus",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -50.64415197854122,
+      "width_cm": 7.216894626617432,
+      "mirrored": false,
+      "outward": 0.2830825448036194,
+      "pos_cm": 0.08115385426208377,
+      "rot_deg": 0.09494764693132407,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "pear",
+    "shape": "ycb_016_pear",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -33.98078193217664,
+      "width_cm": 6.756386905908585,
+      "mirrored": false,
+      "outward": -0.024226240813732147,
+      "pos_cm": 0.2621125662699342,
+      "rot_deg": 0.16011971116599902,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "plum",
+    "shape": "ycb_018_plum",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -28.74648695230488,
+      "width_cm": 5.630062520503998,
+      "mirrored": false,
+      "outward": 0.4769997298717499,
+      "pos_cm": 0.11800030479207635,
+      "rot_deg": 0.08342122912935815,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   }
+  ],
+  [
+   {
+    "label": "apple",
+    "shape": "ycb_013_apple",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -63.929143121782815,
+      "width_cm": 7.511922717094421,
+      "mirrored": false,
+      "outward": 0.03655894100666046,
+      "pos_cm": 0.21469208877533674,
+      "rot_deg": 0.2493060668519909,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -25.573498667713363,
+      "width_cm": 5.9151094406843185,
+      "mirrored": false,
+      "outward": 0.4813767671585083,
+      "pos_cm": 4.848848655819893,
+      "rot_deg": 26.442174079186632,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -32.12105802496557,
+      "width_cm": 7.092422246932983,
+      "mirrored": false,
+      "outward": 0.3748031258583069,
+      "pos_cm": 2.654559165239334,
+      "rot_deg": 2.518705040645545,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "lemon",
+    "shape": "ycb_014_lemon",
+    "category": "citrus",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -26.821567181918745,
+      "width_cm": 5.697591230273247,
+      "mirrored": false,
+      "outward": 0.2958252727985382,
+      "pos_cm": 0.10101298103109002,
+      "rot_deg": 0.0900328589160371,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "banana",
+    "shape": "ycb_011_banana",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -6.6315164694168285,
+      "width_cm": 3.844081610441208,
+      "mirrored": false,
+      "outward": 0.10009187459945679,
+      "pos_cm": 0.10892801219597459,
+      "rot_deg": 0.13624872028512014,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "orange",
+    "shape": "ycb_017_orange",
+    "category": "citrus",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -49.01493671053432,
+      "width_cm": 7.40961953997612,
+      "mirrored": false,
+      "outward": 0.616452157497406,
+      "pos_cm": 0.11781253851950169,
+      "rot_deg": 0.07641364180391018,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "pear",
+    "shape": "ycb_016_pear",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -44.48330768681137,
+      "width_cm": 6.9118693470954895,
+      "mirrored": false,
+      "outward": 0.0355696827173233,
+      "pos_cm": 0.13419031165540218,
+      "rot_deg": 0.07513849084259376,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "plum",
+    "shape": "ycb_018_plum",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -29.29827061459353,
+      "width_cm": 5.467540770769119,
+      "mirrored": false,
+      "outward": 0.448652446269989,
+      "pos_cm": 0.1250439672730863,
+      "rot_deg": 0.1357816260593412,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   }
+  ],
+  [
+   {
+    "label": "apple",
+    "shape": "ycb_013_apple",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -52.6214029508007,
+      "width_cm": 7.355097681283951,
+      "mirrored": false,
+      "outward": -0.2604910135269165,
+      "pos_cm": 2.023949846625328,
+      "rot_deg": 2.7838613085184907,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "lemon",
+    "shape": "ycb_014_lemon",
+    "category": "citrus",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -17.244427899435898,
+      "width_cm": 5.574361607432365,
+      "mirrored": false,
+      "outward": 0.19335326552391052,
+      "pos_cm": 0.09320687386207283,
+      "rot_deg": 0.09700534814049619,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "banana",
+    "shape": "ycb_011_banana",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -2.948849864005438,
+      "width_cm": 3.8633517920970917,
+      "mirrored": false,
+      "outward": -0.14063386619091034,
+      "pos_cm": 0.08194238180294633,
+      "rot_deg": 0.09564936882726355,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "orange",
+    "shape": "ycb_017_orange",
+    "category": "citrus",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -40.38632799620594,
+      "width_cm": 7.247532159090042,
+      "mirrored": false,
+      "outward": 0.2658286392688751,
+      "pos_cm": 0.10114492615684867,
+      "rot_deg": 0.09141693938842332,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "pear",
+    "shape": "ycb_016_pear",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -54.62678064206229,
+      "width_cm": 6.931371241807938,
+      "mirrored": false,
+      "outward": 0.7973593473434448,
+      "pos_cm": 0.14661445748060942,
+      "rot_deg": 0.6959868849141906,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "plum",
+    "shape": "ycb_018_plum",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -24.040486614166095,
+      "width_cm": 5.338213965296745,
+      "mirrored": false,
+      "outward": 0.3363759219646454,
+      "pos_cm": 0.16426239162683487,
+      "rot_deg": 0.13983234178376863,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   }
+  ],
+  [
+   {
+    "label": "apple",
+    "shape": "ycb_013_apple",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -63.827024963501955,
+      "width_cm": 7.820918411016464,
+      "mirrored": false,
+      "outward": 0.8843995332717896,
+      "pos_cm": 5.231618136167526,
+      "rot_deg": 131.44428582198407,
+      "sorted": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -29.102653996764367,
+      "width_cm": 7.871883362531662,
+      "mirrored": false,
+      "outward": -0.0036212652921676636,
+      "pos_cm": 0.5121505353599787,
+      "rot_deg": 0.24198895989935026,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "lemon",
+    "shape": "ycb_014_lemon",
+    "category": "citrus",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -31.40373106776332,
+      "width_cm": 6.0263242572546005,
+      "mirrored": false,
+      "outward": 0.15887543559074402,
+      "pos_cm": 0.08427693974226713,
+      "rot_deg": 0.08662935030621463,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "banana",
+    "shape": "ycb_011_banana",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -14.906978363559332,
+      "width_cm": 4.260074719786644,
+      "mirrored": false,
+      "outward": 0.25817757844924927,
+      "pos_cm": 0.1462703919969499,
+      "rot_deg": 0.2681306551739278,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "orange",
+    "shape": "ycb_017_orange",
+    "category": "citrus",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -44.93061677555551,
+      "width_cm": 7.45052844285965,
+      "mirrored": false,
+      "outward": 0.5165538787841797,
+      "pos_cm": 0.30298891942948103,
+      "rot_deg": 0.5093621044056413,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "pear",
+    "shape": "ycb_016_pear",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -46.86582793347356,
+      "width_cm": 6.460126489400864,
+      "mirrored": false,
+      "outward": 0.7510740756988525,
+      "pos_cm": 0.16674651997163892,
+      "rot_deg": 0.2931969424997722,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "plum",
+    "shape": "ycb_018_plum",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -29.006792291763237,
+      "width_cm": 5.6765589863061905,
+      "mirrored": false,
+      "outward": 0.48412400484085083,
+      "pos_cm": 0.1205107313580811,
+      "rot_deg": 0.4675510480405554,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   }
+  ],
+  [
+   {
+    "label": "apple",
+    "shape": "ycb_013_apple",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -61.27377047815696,
+      "width_cm": 7.655434310436249,
+      "mirrored": false,
+      "outward": 0.46728986501693726,
+      "pos_cm": 0.09584117797203362,
+      "rot_deg": 0.08434390497690489,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "lemon",
+    "shape": "ycb_014_lemon",
+    "category": "citrus",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -31.38249600963375,
+      "width_cm": 5.94470277428627,
+      "mirrored": false,
+      "outward": 0.520239531993866,
+      "pos_cm": 2.366885170340538,
+      "rot_deg": 3.5911235009564133,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "banana",
+    "shape": "ycb_011_banana",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 18.775870717021355,
+      "width_cm": 4.074602946639061,
+      "mirrored": false,
+      "outward": 0.045303843915462494,
+      "pos_cm": 0.07510554860346019,
+      "rot_deg": 0.0917591758885446,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "orange",
+    "shape": "ycb_017_orange",
+    "category": "citrus",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -47.21754852478337,
+      "width_cm": 7.537645101547241,
+      "mirrored": false,
+      "outward": 0.18583206832408905,
+      "pos_cm": 0.0753343163523823,
+      "rot_deg": 0.09507932817604516,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "pear",
+    "shape": "ycb_016_pear",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -36.07128085596952,
+      "width_cm": 6.755761057138443,
+      "mirrored": false,
+      "outward": 0.24023547768592834,
+      "pos_cm": 0.10026426753029227,
+      "rot_deg": 0.1146035973412985,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "plum",
+    "shape": "ycb_018_plum",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -20.332971140223965,
+      "width_cm": 5.688207969069481,
+      "mirrored": false,
+      "outward": 0.2716354727745056,
+      "pos_cm": 0.09659916977398098,
+      "rot_deg": 0.05888862370359378,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   }
+  ],
+  [
+   {
+    "label": "apple",
+    "shape": "ycb_013_apple",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -58.34873513590983,
+      "width_cm": 7.83599391579628,
+      "mirrored": false,
+      "outward": 0.3992396593093872,
+      "pos_cm": 0.09611621499061584,
+      "rot_deg": 0.08600640903946169,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "lemon",
+    "shape": "ycb_014_lemon",
+    "category": "citrus",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -27.599669162355767,
+      "width_cm": 5.482621490955353,
+      "mirrored": false,
+      "outward": 0.40731295943260193,
+      "pos_cm": 0.11545816669240594,
+      "rot_deg": 0.10232284384244285,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "banana",
+    "shape": "ycb_011_banana",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -12.729124735376576,
+      "width_cm": 4.036850482225418,
+      "mirrored": false,
+      "outward": -0.059904444962739944,
+      "pos_cm": 0.08566976175643504,
+      "rot_deg": 0.09839942710269282,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "orange",
+    "shape": "ycb_017_orange",
+    "category": "citrus",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -45.441412472634916,
+      "width_cm": 7.3022812604904175,
+      "mirrored": false,
+      "outward": 0.3803143799304962,
+      "pos_cm": 0.09696167544461787,
+      "rot_deg": 0.1015330298484874,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "pear",
+    "shape": "ycb_016_pear",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -41.2238253016654,
+      "width_cm": 6.843002140522003,
+      "mirrored": false,
+      "outward": 0.5842993855476379,
+      "pos_cm": 0.582555029541254,
+      "rot_deg": 0.8465211059309511,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "plum",
+    "shape": "ycb_018_plum",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -15.022739824707292,
+      "width_cm": 5.667068064212799,
+      "mirrored": false,
+      "outward": 0.2197677046060562,
+      "pos_cm": 0.20055491477251053,
+      "rot_deg": 0.12034090288325631,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   }
+  ],
+  [
+   {
+    "label": "apple",
+    "shape": "ycb_013_apple",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -49.96397783532925,
+      "width_cm": 7.28670060634613,
+      "mirrored": false,
+      "outward": 0.7216305732727051,
+      "pos_cm": 0.1397420302964747,
+      "rot_deg": 0.06951460379345517,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "lemon",
+    "shape": "ycb_014_lemon",
+    "category": "citrus",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -27.332796596010443,
+      "width_cm": 5.53448423743248,
+      "mirrored": false,
+      "outward": 0.26193100214004517,
+      "pos_cm": 0.10958669008687139,
+      "rot_deg": 0.14153093779319942,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "banana",
+    "shape": "ycb_011_banana",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 6.597003950427577,
+      "width_cm": 4.008260741829872,
+      "mirrored": false,
+      "outward": -0.0801210105419159,
+      "pos_cm": 0.06701702950522304,
+      "rot_deg": 0.09410064344328299,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "orange",
+    "shape": "ycb_017_orange",
+    "category": "citrus",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -43.63324624837368,
+      "width_cm": 7.3174066841602325,
+      "mirrored": false,
+      "outward": 0.3950384259223938,
+      "pos_cm": 0.10047616669908166,
+      "rot_deg": 0.09238465846591645,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "pear",
+    "shape": "ycb_016_pear",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 52.11778919763356,
+      "width_cm": 6.804388761520386,
+      "mirrored": true,
+      "outward": -0.782322108745575,
+      "pos_cm": 0.8398191072046757,
+      "rot_deg": 0.8274881968393287,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "plum",
+    "shape": "ycb_018_plum",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -19.546911989403878,
+      "width_cm": 5.634324625134468,
+      "mirrored": false,
+      "outward": 0.2525956630706787,
+      "pos_cm": 0.2770210150629282,
+      "rot_deg": 0.3908389523163208,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   }
+  ],
+  [
+   {
+    "label": "apple",
+    "shape": "ycb_013_apple",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -56.904160371735884,
+      "width_cm": 7.575051486492157,
+      "mirrored": false,
+      "outward": 0.17508921027183533,
+      "pos_cm": 0.0873721728567034,
+      "rot_deg": 0.09240887095291563,
+      "sorted": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -14.465877916770738,
+      "width_cm": 6.319434940814972,
+      "mirrored": false,
+      "outward": 0.11270911246538162,
+      "pos_cm": 0.3463729051873088,
+      "rot_deg": 0.3304104544602197,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "lemon",
+    "shape": "ycb_014_lemon",
+    "category": "citrus",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -25.66845195755488,
+      "width_cm": 5.265171825885773,
+      "mirrored": false,
+      "outward": 0.20200707018375397,
+      "pos_cm": 0.08827975834719837,
+      "rot_deg": 0.08646066998012043,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "banana",
+    "shape": "ycb_011_banana",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -5.261371984175808,
+      "width_cm": 4.490819945931435,
+      "mirrored": false,
+      "outward": 0.10092131048440933,
+      "pos_cm": 0.08487739833071828,
+      "rot_deg": 0.09426244021935427,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "orange",
+    "shape": "ycb_017_orange",
+    "category": "citrus",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -47.10132944096102,
+      "width_cm": 7.4280016124248505,
+      "mirrored": false,
+      "outward": 0.7329251766204834,
+      "pos_cm": 0.1427968847565353,
+      "rot_deg": 0.07651313978423155,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "pear",
+    "shape": "ycb_016_pear",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -42.44013514377752,
+      "width_cm": 7.153880596160889,
+      "mirrored": false,
+      "outward": 0.5100736618041992,
+      "pos_cm": 0.12061292072758079,
+      "rot_deg": 0.11104467524743179,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "plum",
+    "shape": "ycb_018_plum",
+    "category": "other",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -32.23911784476924,
+      "width_cm": 5.64865879714489,
+      "mirrored": false,
+      "outward": 0.5465829968452454,
+      "pos_cm": 0.12279230868443847,
+      "rot_deg": 0.05044729696203816,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   }
+  ]
+ ]
+}

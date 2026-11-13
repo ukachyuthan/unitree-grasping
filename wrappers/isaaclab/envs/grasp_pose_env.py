@@ -601,6 +601,8 @@ class GraspPoseEnv(DirectRLEnv):
                               min=self.cfg.table_surface_z + self.cfg.spawn_z_offset)
         self._spawn_z[env_ids] = spawn_z   # record for reward computation
 
+        self._randomize_object_physics(env_ids)
+
         # Park every shape underground, each in its own grid cell (stacked at one
         # point, parked meshes collide with each other, which with variants
         # overflows PhysX's GPU contact patch buffer), then place the chosen one.
@@ -733,6 +735,36 @@ class GraspPoseEnv(DirectRLEnv):
         """Store settled root state of each env's active object."""
         self._obj_anchor[:] = self._active_obj_state()
 
+    def _randomize_object_physics(self, env_ids: torch.Tensor):
+        """Robustness tests: draw mass and friction for each reset env's active object."""
+        mass_range, fric_range = self.cfg.random_object_mass, self.cfg.random_object_friction
+        if mass_range is None and fric_range is None:
+            return
+        view = self._objects.root_physx_view
+        ids = (self._env_shape[env_ids] * self.num_envs + env_ids).cpu()
+        n = len(ids)
+        if mass_range is not None:
+            masses, inertias = view.get_masses(), view.get_inertias()
+            new = torch.empty(n).uniform_(*mass_range)
+            inertias[ids] *= (new / masses[ids, 0]).unsqueeze(-1)   # same shape, scaled density
+            masses[ids, 0] = new
+            view.set_masses(masses, ids)
+            view.set_inertias(inertias, ids)
+        if fric_range is not None:
+            mats = view.get_material_properties()
+            # Discrete levels: PhysX creates one material per distinct value.
+            lo, hi = fric_range
+            static = lo + (hi - lo) * torch.randint(0, 16, (n,)).float() / 15
+            mats[ids, :, 0] = static.unsqueeze(-1)
+            mats[ids, :, 1] = static.unsqueeze(-1) * (1.3 / 1.5)
+            view.set_material_properties(mats, ids)
+        if not getattr(self, "_robust_logged", False):
+            self._robust_logged = True
+            hand = self._robot.root_physx_view.get_material_properties()
+            print(f"[robust] object mass {view.get_masses()[ids, 0][:4].tolist()} "
+                  f"friction {view.get_material_properties()[ids, 0, 0][:4].tolist()} "
+                  f"hand friction {hand[0, :, 0].min():.2f}..{hand[0, :, 0].max():.2f}", flush=True)
+
     def _active_obj_state(self) -> torch.Tensor:
         """(B, 13) world root state [pos, quat wxyz, lin vel, ang vel] of each env's active shape."""
         return self._objects.data.object_state_w[self._all_env_ids, self._env_shape]
@@ -781,6 +813,8 @@ class GraspPoseEnv(DirectRLEnv):
         self._obj_anchor[env_ids] = pinned
 
     def _pin_objects(self):
+        if self.cfg.free_objects:
+            return
         pinned = self._obj_anchor.clone()
         pinned[:, 7:] = 0.0
         self._write_active_obj_state(pinned, self._all_env_ids)

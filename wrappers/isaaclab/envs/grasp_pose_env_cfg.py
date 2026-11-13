@@ -129,6 +129,12 @@ OBJECT_CONTACT_FILTER_PATHS = [
 ]
 
 
+def _env_range(name: str) -> tuple[float, float] | None:
+    """'lo,hi' from an environment variable, or None when it is unset."""
+    v = os.environ.get(name)
+    return tuple(float(x) for x in v.split(",")) if v else None
+
+
 def _auto_color(name: str) -> tuple[float, float, float]:
     """Deterministic distinct visualization color per real-object name."""
     h = int(hashlib.md5(name.encode()).hexdigest(), 16) % 360 / 360.0
@@ -336,6 +342,13 @@ class GraspPoseEnvCfg(DirectRLEnvCfg):
     # fingers close, as if propped) instead of flat on the table.
     tilted_spawn_prob: float = 0.0
     settle_steps: int      = 30
+    # Robustness tests only; unset, these leave training and evaluation unchanged.
+    # GRASP_FREE_OBJECTS=1: objects are not held still while the hand approaches.
+    # GRASP_RAND_MASS / GRASP_RAND_FRICTION='lo,hi': each episode draws the object's mass (kg)
+    # and static friction (dynamic friction keeps the 1.3 / 1.5 ratio of the sim material).
+    free_objects: bool = os.environ.get("GRASP_FREE_OBJECTS", "0") == "1"
+    random_object_mass: tuple | None = _env_range("GRASP_RAND_MASS")
+    random_object_friction: tuple | None = _env_range("GRASP_RAND_FRICTION")
 
     # ── Approach / lift execution ─────────────────────────────────────────────
     approach_mode: str = "top"           # palm above object; fingers reach down

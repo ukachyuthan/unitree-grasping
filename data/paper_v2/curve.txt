@@ -34,3 +34,4 @@ D_s3 75 flat 163/199 tilted 164/198 hard: demo cases: 37.3% of 118 attempts held
 D_s3 100 flat 165/199 tilted 162/197 hard: demo cases: 33.1% of 118 attempts heldout cases: 29.6% of 142 attempts 
 D_s3 125 flat 165/199 tilted 169/199 hard: demo cases: 33.9% of 118 attempts heldout cases: 28.9% of 142 attempts 
 D_s3 150 flat 169/199 tilted 159/197 hard: demo cases: 39.8% of 118 attempts heldout cases: 40.8% of 142 attempts 
+A_s4 150 flat 168/196 tilted 155/199 hard: demo cases: 21.2% of 118 attempts heldout cases: 26.1% of 142 attempts 

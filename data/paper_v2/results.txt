@@ -3,3 +3,5 @@
 02:38 eval A_s2: flat 156/197 tilted 157/197
 02:38 eval A_s1: flat 163/198 tilted 159/199
 05:50 eval A_s3: flat 168/197 tilted 159/198
+warmstart flat 116/198 tilted 121/193 hard: 
+warmstart flat 116/198 tilted 121/193 hard: demo cases: 37.3% of 118 attempts heldout cases: 33.1% of 142 attempts 

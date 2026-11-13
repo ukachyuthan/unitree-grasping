@@ -1,0 +1,788 @@
+{
+ "scene": "showcase",
+ "checkpoint": "data/grasp_logs/paper_v2/D_s2/grasp_pose_envs256_20261103_230555/grasp_pose_final.pt",
+ "seed": 2,
+ "max_tries": 3,
+ "trials": [
+  [
+   {
+    "label": "knife",
+    "shape": "ycb_032_knife",
+    "category": "tools",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 9.426422620710053,
+      "width_cm": 2.500000037252903,
+      "mirrored": false,
+      "outward": 0.061793625354766846,
+      "pos_cm": 0.09489334770478308,
+      "rot_deg": 0.10403172515626831,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "clamp",
+    "shape": "ycb_050_medium_clamp",
+    "category": "tools",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 21.685809633655463,
+      "width_cm": 2.930457703769207,
+      "mirrored": false,
+      "outward": -0.3872828185558319,
+      "pos_cm": 0.08373779710382223,
+      "rot_deg": 0.076196976730854,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "marker",
+    "shape": "ycb_040_large_marker",
+    "category": "tools",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 13.748713176561276,
+      "width_cm": 2.500000037252903,
+      "mirrored": false,
+      "outward": -0.12842918932437897,
+      "pos_cm": 0.06707574357278645,
+      "rot_deg": 1.038876895400817,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "spray",
+    "shape": "ycb_022_windex_bottle",
+    "category": "household",
+    "case": null,
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -20.292505684486223,
+      "width_cm": 5.55751845240593,
+      "mirrored": false,
+      "outward": 0.028780173510313034,
+      "pos_cm": 4.734110459685326,
+      "rot_deg": 2.2967798147939598,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -19.129321053738465,
+      "width_cm": 7.283696532249451,
+      "mirrored": false,
+      "outward": 0.03319781273603439,
+      "pos_cm": 5.63981868326664,
+      "rot_deg": 2.3924558240270293,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "bleach",
+    "shape": "ycb_021_bleach_cleanser",
+    "category": "household",
+    "case": null,
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -80.97644151648839,
+      "width_cm": 5.29964305460453,
+      "mirrored": false,
+      "outward": -0.13888433575630188,
+      "pos_cm": 12.381032109260559,
+      "rot_deg": 28.80411325833228,
+      "sorted": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -46.073672838819235,
+      "width_cm": 5.720724910497665,
+      "mirrored": false,
+      "outward": 0.19220498204231262,
+      "pos_cm": 1.2079947628080845,
+      "rot_deg": 1.1244447582707962,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "cup",
+    "shape": "ycb_065-c_cups",
+    "category": "household",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -71.17477171787242,
+      "width_cm": 5.314968153834343,
+      "mirrored": false,
+      "outward": 0.1464497447013855,
+      "pos_cm": 0.9320417419075966,
+      "rot_deg": 0.67017869497018,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   }
+  ],
+  [
+   {
+    "label": "knife",
+    "shape": "ycb_032_knife",
+    "category": "tools",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 9.027547257144125,
+      "width_cm": 2.500000037252903,
+      "mirrored": false,
+      "outward": -0.04960843175649643,
+      "pos_cm": 0.09042707970365882,
+      "rot_deg": 0.11697892902730266,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "clamp",
+    "shape": "ycb_050_medium_clamp",
+    "category": "tools",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 3.3550234981429363,
+      "width_cm": 5.095476657152176,
+      "mirrored": false,
+      "outward": -0.047962695360183716,
+      "pos_cm": 0.10072491131722927,
+      "rot_deg": 0.12073379884309073,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "marker",
+    "shape": "ycb_040_large_marker",
+    "category": "tools",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 1.178194291613977,
+      "width_cm": 2.500000037252903,
+      "mirrored": false,
+      "outward": 0.0235615037381649,
+      "pos_cm": 0.10287564946338534,
+      "rot_deg": 0.11678948465932737,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "spray",
+    "shape": "ycb_022_windex_bottle",
+    "category": "household",
+    "case": null,
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -12.294146699405253,
+      "width_cm": 5.370258912444115,
+      "mirrored": false,
+      "outward": 0.12757620215415955,
+      "pos_cm": 1.1876022443175316,
+      "rot_deg": 0.36148480029558944,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -2.815135250624098,
+      "width_cm": 4.988619312644005,
+      "mirrored": false,
+      "outward": 0.07587496936321259,
+      "pos_cm": 0.8503223769366741,
+      "rot_deg": 0.5463545690329891,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -16.389458970079552,
+      "width_cm": 5.942153558135033,
+      "mirrored": false,
+      "outward": 0.2109021544456482,
+      "pos_cm": 1.350393332540989,
+      "rot_deg": 1.2312657152386222,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "bleach",
+    "shape": "ycb_021_bleach_cleanser",
+    "category": "household",
+    "case": null,
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -81.67050484937758,
+      "width_cm": 6.925658881664276,
+      "mirrored": false,
+      "outward": -0.20444440841674805,
+      "pos_cm": 0.03010248765349388,
+      "rot_deg": 0.09398808539421662,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -30.644336975462963,
+      "width_cm": 7.999999821186066,
+      "mirrored": false,
+      "outward": -0.04923394322395325,
+      "pos_cm": 4.343758895993233,
+      "rot_deg": 4.8585748113658225,
+      "sorted": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -60.63165073390572,
+      "width_cm": 7.999999821186066,
+      "mirrored": false,
+      "outward": 0.08546291291713715,
+      "pos_cm": 6.869523227214813,
+      "rot_deg": 6.02333422760409,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "cup",
+    "shape": "ycb_065-c_cups",
+    "category": "household",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -64.6747060810139,
+      "width_cm": 5.812988802790642,
+      "mirrored": false,
+      "outward": 0.2890627682209015,
+      "pos_cm": 0.606867577880621,
+      "rot_deg": 0.41628674305990737,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   }
+  ],
+  [
+   {
+    "label": "knife",
+    "shape": "ycb_032_knife",
+    "category": "tools",
+    "case": null,
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 18.854054184903198,
+      "width_cm": 2.500000037252903,
+      "mirrored": false,
+      "outward": -0.18628843128681183,
+      "pos_cm": 1.1967730708420277,
+      "rot_deg": 1.1934058699475358,
+      "sorted": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 23.273644200575838,
+      "width_cm": 2.500000037252903,
+      "mirrored": false,
+      "outward": -0.39339780807495117,
+      "pos_cm": 0.07864689105190337,
+      "rot_deg": 0.0899496893567003,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "clamp",
+    "shape": "ycb_050_medium_clamp",
+    "category": "tools",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 7.134019036183367,
+      "width_cm": 4.1506413370370865,
+      "mirrored": false,
+      "outward": -0.12340781837701797,
+      "pos_cm": 0.09295680210925639,
+      "rot_deg": 0.0690515049615364,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "marker",
+    "shape": "ycb_040_large_marker",
+    "category": "tools",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 2.0377154353304308,
+      "width_cm": 2.500000037252903,
+      "mirrored": false,
+      "outward": -0.04822465032339096,
+      "pos_cm": 0.08930423646233976,
+      "rot_deg": 0.07113663364909437,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "spray",
+    "shape": "ycb_022_windex_bottle",
+    "category": "household",
+    "case": null,
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -50.33228554103843,
+      "width_cm": 7.999999821186066,
+      "mirrored": false,
+      "outward": 0.3224916458129883,
+      "pos_cm": 5.254308506846428,
+      "rot_deg": 3.411846616612623,
+      "sorted": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -43.14338849619495,
+      "width_cm": 7.999999821186066,
+      "mirrored": false,
+      "outward": 0.6282932758331299,
+      "pos_cm": 4.325593262910843,
+      "rot_deg": 4.712530852758964,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "bleach",
+    "shape": "ycb_021_bleach_cleanser",
+    "category": "household",
+    "case": null,
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -81.10056654427504,
+      "width_cm": 5.418890342116356,
+      "mirrored": false,
+      "outward": -0.02329188399016857,
+      "pos_cm": 11.453478783369064,
+      "rot_deg": 15.122370086582976,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -86.82645072928013,
+      "width_cm": 5.557715147733688,
+      "mirrored": false,
+      "outward": -0.05419771373271942,
+      "pos_cm": 4.270710051059723,
+      "rot_deg": 4.372802366084407,
+      "sorted": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -90.00000250447816,
+      "width_cm": 5.7268694043159485,
+      "mirrored": false,
+      "outward": -0.007486492395401001,
+      "pos_cm": 0.32060607336461544,
+      "rot_deg": 0.2699690432777191,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "cup",
+    "shape": "ycb_065-c_cups",
+    "category": "household",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -67.296904495841,
+      "width_cm": 5.499393492937088,
+      "mirrored": false,
+      "outward": 0.19888818264007568,
+      "pos_cm": 1.0391747578978539,
+      "rot_deg": 0.819763412970603,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   }
+  ],
+  [
+   {
+    "label": "knife",
+    "shape": "ycb_032_knife",
+    "category": "tools",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -4.749720379016037,
+      "width_cm": 2.500000037252903,
+      "mirrored": false,
+      "outward": 0.08575647324323654,
+      "pos_cm": 0.10672564385458827,
+      "rot_deg": 0.14112271392837214,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "clamp",
+    "shape": "ycb_050_medium_clamp",
+    "category": "tools",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 19.503424174958404,
+      "width_cm": 4.572760313749313,
+      "mirrored": false,
+      "outward": -0.35493093729019165,
+      "pos_cm": 0.7064387202262878,
+      "rot_deg": 0.9004119921734393,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "marker",
+    "shape": "ycb_040_large_marker",
+    "category": "tools",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 0.9122785920826901,
+      "width_cm": 2.500000037252903,
+      "mirrored": false,
+      "outward": -0.09707920253276825,
+      "pos_cm": 0.0878004590049386,
+      "rot_deg": 0.0798385881363815,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "spray",
+    "shape": "ycb_022_windex_bottle",
+    "category": "household",
+    "case": null,
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -1.5886677432774101,
+      "width_cm": 7.2198837995529175,
+      "mirrored": false,
+      "outward": -0.02356799691915512,
+      "pos_cm": 2.53712497651577,
+      "rot_deg": 1.5308689749734696,
+      "sorted": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 9.858768472529983,
+      "width_cm": 6.932222098112106,
+      "mirrored": false,
+      "outward": -0.04274493455886841,
+      "pos_cm": 1.6407879069447517,
+      "rot_deg": 0.18272207444982735,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "bleach",
+    "shape": "ycb_021_bleach_cleanser",
+    "category": "household",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -79.90774913781317,
+      "width_cm": 5.9285469353199005,
+      "mirrored": false,
+      "outward": 0.38970285654067993,
+      "pos_cm": 8.394529670476913,
+      "rot_deg": 10.581022557444749,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "cup",
+    "shape": "ycb_065-c_cups",
+    "category": "household",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -64.77356623906066,
+      "width_cm": 5.268668755888939,
+      "mirrored": false,
+      "outward": 0.3433772027492523,
+      "pos_cm": 0.4996876697987318,
+      "rot_deg": 0.33682320167806834,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   }
+  ],
+  [
+   {
+    "label": "knife",
+    "shape": "ycb_032_knife",
+    "category": "tools",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 14.031407876118935,
+      "width_cm": 2.9630744829773903,
+      "mirrored": false,
+      "outward": 0.052903663367033005,
+      "pos_cm": 0.09438208653591573,
+      "rot_deg": 1.1403542965601658,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "clamp",
+    "shape": "ycb_050_medium_clamp",
+    "category": "tools",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 5.111275162070193,
+      "width_cm": 5.2479855716228485,
+      "mirrored": false,
+      "outward": 0.02531253732740879,
+      "pos_cm": 0.09131044498644769,
+      "rot_deg": 1.0498161904085328,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "marker",
+    "shape": "ycb_040_large_marker",
+    "category": "tools",
+    "case": null,
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 13.700686701412332,
+      "width_cm": 2.500000037252903,
+      "mirrored": false,
+      "outward": -0.14911222457885742,
+      "pos_cm": 0.08387321722693741,
+      "rot_deg": 0.09506819576811083,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "spray",
+    "shape": "ycb_022_windex_bottle",
+    "category": "household",
+    "case": null,
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 7.366008118890143,
+      "width_cm": 5.58655746281147,
+      "mirrored": false,
+      "outward": 0.08259452134370804,
+      "pos_cm": 13.392375409603119,
+      "rot_deg": 50.662610564773175,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -13.497997422697619,
+      "width_cm": 6.521228700876236,
+      "mirrored": false,
+      "outward": -0.19156035780906677,
+      "pos_cm": 15.563128888607025,
+      "rot_deg": 58.92967687576526,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 6.479715088226472,
+      "width_cm": 5.484312400221825,
+      "mirrored": false,
+      "outward": -0.10525082796812057,
+      "pos_cm": 1.1819751001894474,
+      "rot_deg": 0.782347690058126,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "bleach",
+    "shape": "ycb_021_bleach_cleanser",
+    "category": "household",
+    "case": null,
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -83.34160625246957,
+      "width_cm": 6.164549291133881,
+      "mirrored": false,
+      "outward": 0.2224964201450348,
+      "pos_cm": 11.87819242477417,
+      "rot_deg": 12.172918525600343,
+      "sorted": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -18.14990778525178,
+      "width_cm": 6.067102402448654,
+      "mirrored": false,
+      "outward": 0.09941843897104263,
+      "pos_cm": 0.7589473389089108,
+      "rot_deg": 0.7131866352656049,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "cup",
+    "shape": "ycb_065-c_cups",
+    "category": "household",
+    "case": null,
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -70.62341835750148,
+      "width_cm": 5.3198885172605515,
+      "mirrored": false,
+      "outward": 0.15447942912578583,
+      "pos_cm": 6.5568700432777405,
+      "rot_deg": 5.301181314866404,
+      "sorted": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -43.31604543312912,
+      "width_cm": 6.1156608164310455,
+      "mirrored": false,
+      "outward": 0.3891397714614868,
+      "pos_cm": 0.5059754475951195,
+      "rot_deg": 0.4338737598011762,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   }
+  ]
+ ]
+}

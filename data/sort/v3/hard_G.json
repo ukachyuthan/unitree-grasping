@@ -1,0 +1,1448 @@
+{
+ "scene": "hard",
+ "checkpoint": null,
+ "seed": 1,
+ "max_tries": 3,
+ "trials": [
+  [
+   {
+    "label": "fork",
+    "shape": "ycb_030_fork",
+    "category": "kitchen",
+    "case": "ycb_030_fork.v001__it000051__q1109__s1",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 8.364663488690862,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": -0.04738413915038109,
+      "pos_cm": 0.08112442446872592,
+      "rot_deg": 0.09564590037182565,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "sponge",
+    "shape": "ycb_026_sponge",
+    "category": "kitchen",
+    "case": "ycb_026_sponge.v001__it000051__q511__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "pudding",
+    "shape": "ycb_008_pudding_box",
+    "category": "kitchen",
+    "case": "ycb_008_pudding_box.v002__it000051__q414__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "scissors",
+    "shape": "ycb_037_scissors",
+    "category": "tools",
+    "case": "ycb_037_scissors.v004__it000051__q527__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 43.60029584249018,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": 0.010457411408424377,
+      "pos_cm": 0.0556900049559772,
+      "rot_deg": 0.09919401689298199,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "clamp",
+    "shape": "ycb_052_extra_large_clamp",
+    "category": "tools",
+    "case": "ycb_052_extra_large_clamp.v002__it000051__q1451__s2",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 7.461929187154206,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": 0.0987042561173439,
+      "pos_cm": 0.08031182223930955,
+      "rot_deg": 0.10292259981861476,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "wrench",
+    "shape": "ycb_042_adjustable_wrench",
+    "category": "tools",
+    "case": "ycb_042_adjustable_wrench.v001__it000051__q492__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   }
+  ],
+  [
+   {
+    "label": "fork",
+    "shape": "ycb_030_fork",
+    "category": "kitchen",
+    "case": "ycb_030_fork.v001__it000051__q1109__s1",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 8.368958468272938,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": -0.04388079047203064,
+      "pos_cm": 0.08454758208245039,
+      "rot_deg": 0.10146670897845084,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "sponge",
+    "shape": "ycb_026_sponge",
+    "category": "kitchen",
+    "case": "ycb_026_sponge.v001__it000051__q511__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "pudding",
+    "shape": "ycb_008_pudding_box",
+    "category": "kitchen",
+    "case": "ycb_008_pudding_box.v002__it000051__q414__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "scissors",
+    "shape": "ycb_037_scissors",
+    "category": "tools",
+    "case": "ycb_037_scissors.v004__it000051__q527__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 43.60021660857453,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": 0.013497963547706604,
+      "pos_cm": 0.054964335868135095,
+      "rot_deg": 0.10041666744516055,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "clamp",
+    "shape": "ycb_052_extra_large_clamp",
+    "category": "tools",
+    "case": "ycb_052_extra_large_clamp.v002__it000051__q1451__s2",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 7.471153688840596,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": 0.09720908105373383,
+      "pos_cm": 0.08023058762773871,
+      "rot_deg": 0.10343481731561943,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "wrench",
+    "shape": "ycb_042_adjustable_wrench",
+    "category": "tools",
+    "case": "ycb_042_adjustable_wrench.v001__it000051__q492__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   }
+  ],
+  [
+   {
+    "label": "fork",
+    "shape": "ycb_030_fork",
+    "category": "kitchen",
+    "case": "ycb_030_fork.v001__it000051__q1109__s1",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 8.04300629387601,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": -0.03957405313849449,
+      "pos_cm": 0.08370995637960732,
+      "rot_deg": 0.08329918618869045,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "sponge",
+    "shape": "ycb_026_sponge",
+    "category": "kitchen",
+    "case": "ycb_026_sponge.v001__it000051__q511__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "pudding",
+    "shape": "ycb_008_pudding_box",
+    "category": "kitchen",
+    "case": "ycb_008_pudding_box.v002__it000051__q414__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "scissors",
+    "shape": "ycb_037_scissors",
+    "category": "tools",
+    "case": "ycb_037_scissors.v004__it000051__q527__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 43.60019680007763,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": 0.0024151206016540527,
+      "pos_cm": 0.05381170776672661,
+      "rot_deg": 0.1022384669938094,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "clamp",
+    "shape": "ycb_052_extra_large_clamp",
+    "category": "tools",
+    "case": "ycb_052_extra_large_clamp.v002__it000051__q1451__s2",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 7.410076861089216,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": 0.09737908840179443,
+      "pos_cm": 0.080675701610744,
+      "rot_deg": 0.10461663347512337,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "wrench",
+    "shape": "ycb_042_adjustable_wrench",
+    "category": "tools",
+    "case": "ycb_042_adjustable_wrench.v001__it000051__q492__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   }
+  ],
+  [
+   {
+    "label": "fork",
+    "shape": "ycb_030_fork",
+    "category": "kitchen",
+    "case": "ycb_030_fork.v001__it000051__q1109__s1",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 8.04281102660006,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": -0.038053274154663086,
+      "pos_cm": 0.08115707314573228,
+      "rot_deg": 0.09546824208223259,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "sponge",
+    "shape": "ycb_026_sponge",
+    "category": "kitchen",
+    "case": "ycb_026_sponge.v001__it000051__q511__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "pudding",
+    "shape": "ycb_008_pudding_box",
+    "category": "kitchen",
+    "case": "ycb_008_pudding_box.v002__it000051__q414__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "scissors",
+    "shape": "ycb_037_scissors",
+    "category": "tools",
+    "case": "ycb_037_scissors.v004__it000051__q527__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 43.60034536362904,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": 0.0014220774173736572,
+      "pos_cm": 0.052892137318849564,
+      "rot_deg": 0.10342287115467852,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "clamp",
+    "shape": "ycb_052_extra_large_clamp",
+    "category": "tools",
+    "case": "ycb_052_extra_large_clamp.v002__it000051__q1451__s2",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 7.420026607760689,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": 0.09917501360177994,
+      "pos_cm": 0.0810143887065351,
+      "rot_deg": 0.1044772549273728,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "wrench",
+    "shape": "ycb_042_adjustable_wrench",
+    "category": "tools",
+    "case": "ycb_042_adjustable_wrench.v001__it000051__q492__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   }
+  ],
+  [
+   {
+    "label": "fork",
+    "shape": "ycb_030_fork",
+    "category": "kitchen",
+    "case": "ycb_030_fork.v001__it000051__q1109__s1",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 8.124316395139829,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": -0.044067658483982086,
+      "pos_cm": 0.08337129838764668,
+      "rot_deg": 0.0861213950073346,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "sponge",
+    "shape": "ycb_026_sponge",
+    "category": "kitchen",
+    "case": "ycb_026_sponge.v001__it000051__q511__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "pudding",
+    "shape": "ycb_008_pudding_box",
+    "category": "kitchen",
+    "case": "ycb_008_pudding_box.v002__it000051__q414__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "scissors",
+    "shape": "ycb_037_scissors",
+    "category": "tools",
+    "case": "ycb_037_scissors.v004__it000051__q527__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 43.60019680007763,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": 0.003194063901901245,
+      "pos_cm": 0.05425472045317292,
+      "rot_deg": 0.10040777619304764,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "clamp",
+    "shape": "ycb_052_extra_large_clamp",
+    "category": "tools",
+    "case": "ycb_052_extra_large_clamp.v002__it000051__q1451__s2",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 7.412803777279199,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": 0.09950961172580719,
+      "pos_cm": 0.08102587889879942,
+      "rot_deg": 0.10489546394179725,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "wrench",
+    "shape": "ycb_042_adjustable_wrench",
+    "category": "tools",
+    "case": "ycb_042_adjustable_wrench.v001__it000051__q492__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   }
+  ],
+  [
+   {
+    "label": "fork",
+    "shape": "ycb_030_fork",
+    "category": "kitchen",
+    "case": "ycb_030_fork.v001__it000051__q1109__s1",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 8.041785796124383,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": -0.039900656789541245,
+      "pos_cm": 0.08233708795160055,
+      "rot_deg": 0.09753033889166159,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "sponge",
+    "shape": "ycb_026_sponge",
+    "category": "kitchen",
+    "case": "ycb_026_sponge.v001__it000051__q511__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "pudding",
+    "shape": "ycb_008_pudding_box",
+    "category": "kitchen",
+    "case": "ycb_008_pudding_box.v002__it000051__q414__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "scissors",
+    "shape": "ycb_037_scissors",
+    "category": "tools",
+    "case": "ycb_037_scissors.v004__it000051__q527__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 43.6002661297853,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": -0.004007667303085327,
+      "pos_cm": 0.05436124047264457,
+      "rot_deg": 0.09958886719405352,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "clamp",
+    "shape": "ycb_052_extra_large_clamp",
+    "category": "tools",
+    "case": "ycb_052_extra_large_clamp.v002__it000051__q1451__s2",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 7.412777307160152,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": 0.1007678210735321,
+      "pos_cm": 0.08119536214508116,
+      "rot_deg": 0.10481246780523233,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "wrench",
+    "shape": "ycb_042_adjustable_wrench",
+    "category": "tools",
+    "case": "ycb_042_adjustable_wrench.v001__it000051__q492__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   }
+  ],
+  [
+   {
+    "label": "fork",
+    "shape": "ycb_030_fork",
+    "category": "kitchen",
+    "case": "ycb_030_fork.v001__it000051__q1109__s1",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 8.120787478485413,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": -0.04722365364432335,
+      "pos_cm": 0.0820235291030258,
+      "rot_deg": 0.09875861901382012,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "sponge",
+    "shape": "ycb_026_sponge",
+    "category": "kitchen",
+    "case": "ycb_026_sponge.v001__it000051__q511__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "pudding",
+    "shape": "ycb_008_pudding_box",
+    "category": "kitchen",
+    "case": "ycb_008_pudding_box.v002__it000051__q414__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "scissors",
+    "shape": "ycb_037_scissors",
+    "category": "tools",
+    "case": "ycb_037_scissors.v004__it000051__q527__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 43.600142326674096,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": 0.00831855833530426,
+      "pos_cm": 0.0565857975743711,
+      "rot_deg": 0.09800771175172862,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "clamp",
+    "shape": "ycb_052_extra_large_clamp",
+    "category": "tools",
+    "case": "ycb_052_extra_large_clamp.v002__it000051__q1451__s2",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 7.426608372923032,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": 0.1001606285572052,
+      "pos_cm": 0.08113920921459794,
+      "rot_deg": 0.10496604033985184,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "wrench",
+    "shape": "ycb_042_adjustable_wrench",
+    "category": "tools",
+    "case": "ycb_042_adjustable_wrench.v001__it000051__q492__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   }
+  ],
+  [
+   {
+    "label": "fork",
+    "shape": "ycb_030_fork",
+    "category": "kitchen",
+    "case": "ycb_030_fork.v001__it000051__q1109__s1",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 8.36360701071024,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": -0.046651579439640045,
+      "pos_cm": 0.08552375948056579,
+      "rot_deg": 0.10077738014059524,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "sponge",
+    "shape": "ycb_026_sponge",
+    "category": "kitchen",
+    "case": "ycb_026_sponge.v001__it000051__q511__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "pudding",
+    "shape": "ycb_008_pudding_box",
+    "category": "kitchen",
+    "case": "ycb_008_pudding_box.v002__it000051__q414__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "scissors",
+    "shape": "ycb_037_scissors",
+    "category": "tools",
+    "case": "ycb_037_scissors.v004__it000051__q527__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 43.600305746721546,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": 0.02280828356742859,
+      "pos_cm": 0.056466320529580116,
+      "rot_deg": 0.0991688505807374,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "clamp",
+    "shape": "ycb_052_extra_large_clamp",
+    "category": "tools",
+    "case": "ycb_052_extra_large_clamp.v002__it000051__q1451__s2",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 7.460745738572404,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": 0.097796730697155,
+      "pos_cm": 0.08052276680245996,
+      "rot_deg": 0.10396991994840762,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "wrench",
+    "shape": "ycb_042_adjustable_wrench",
+    "category": "tools",
+    "case": "ycb_042_adjustable_wrench.v001__it000051__q492__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   }
+  ],
+  [
+   {
+    "label": "fork",
+    "shape": "ycb_030_fork",
+    "category": "kitchen",
+    "case": "ycb_030_fork.v001__it000051__q1109__s1",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 8.075647371640812,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": -0.04407870024442673,
+      "pos_cm": 0.08541469578631222,
+      "rot_deg": 0.1005050330175476,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "sponge",
+    "shape": "ycb_026_sponge",
+    "category": "kitchen",
+    "case": "ycb_026_sponge.v001__it000051__q511__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "pudding",
+    "shape": "ycb_008_pudding_box",
+    "category": "kitchen",
+    "case": "ycb_008_pudding_box.v002__it000051__q414__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "scissors",
+    "shape": "ycb_037_scissors",
+    "category": "tools",
+    "case": "ycb_037_scissors.v004__it000051__q527__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 43.60016708731881,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": 0.006142169237136841,
+      "pos_cm": 0.05412971950136125,
+      "rot_deg": 0.10075618921189101,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "clamp",
+    "shape": "ycb_052_extra_large_clamp",
+    "category": "tools",
+    "case": "ycb_052_extra_large_clamp.v002__it000051__q1451__s2",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 7.418810063915408,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": 0.09783120453357697,
+      "pos_cm": 0.08003351395018399,
+      "rot_deg": 0.10200776801644296,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "wrench",
+    "shape": "ycb_042_adjustable_wrench",
+    "category": "tools",
+    "case": "ycb_042_adjustable_wrench.v001__it000051__q492__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   }
+  ],
+  [
+   {
+    "label": "fork",
+    "shape": "ycb_030_fork",
+    "category": "kitchen",
+    "case": "ycb_030_fork.v001__it000051__q1109__s1",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 8.365320785908107,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": -0.0476895347237587,
+      "pos_cm": 0.0852971279527992,
+      "rot_deg": 0.07687145791139277,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "sponge",
+    "shape": "ycb_026_sponge",
+    "category": "kitchen",
+    "case": "ycb_026_sponge.v001__it000051__q511__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "pudding",
+    "shape": "ycb_008_pudding_box",
+    "category": "kitchen",
+    "case": "ycb_008_pudding_box.v002__it000051__q414__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "scissors",
+    "shape": "ycb_037_scissors",
+    "category": "tools",
+    "case": "ycb_037_scissors.v004__it000051__q527__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 43.60025622554674,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": 0.016551494598388672,
+      "pos_cm": 0.055237358901649714,
+      "rot_deg": 0.10018025218642819,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "clamp",
+    "shape": "ycb_052_extra_large_clamp",
+    "category": "tools",
+    "case": "ycb_052_extra_large_clamp.v002__it000051__q1451__s2",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 7.42211542690034,
+      "width_cm": 2.5,
+      "mirrored": false,
+      "outward": 0.09826748818159103,
+      "pos_cm": 0.08082760614342988,
+      "rot_deg": 0.10495709572688602,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "wrench",
+    "shape": "ycb_042_adjustable_wrench",
+    "category": "tools",
+    "case": "ycb_042_adjustable_wrench.v001__it000051__q492__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     },
+     {
+      "lifted": false,
+      "sorted": false,
+      "reachable": false
+     }
+    ],
+    "sorted": false
+   }
+  ]
+ ]
+}

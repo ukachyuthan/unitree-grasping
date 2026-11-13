@@ -1,0 +1,1987 @@
+{
+ "scene": "hard",
+ "checkpoint": "data/grasp_logs/paper_v2/A_s2/grasp_pose_envs256_20261102_204435/grasp_pose_final.pt",
+ "seed": 1,
+ "max_tries": 3,
+ "trials": [
+  [
+   {
+    "label": "fork",
+    "shape": "ycb_030_fork",
+    "category": "kitchen",
+    "case": "ycb_030_fork.v001__it000051__q1109__s1",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 2.683737352031862,
+      "width_cm": 2.6504164561629295,
+      "mirrored": false,
+      "outward": -0.032732389867305756,
+      "pos_cm": 0.090468127746135,
+      "rot_deg": 0.0710825991154359,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "sponge",
+    "shape": "ycb_026_sponge",
+    "category": "kitchen",
+    "case": "ycb_026_sponge.v001__it000051__q511__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 5.446461572946691,
+      "width_cm": 5.011978000402451,
+      "mirrored": false,
+      "outward": -0.09325257688760757,
+      "pos_cm": 0.9815376251935959,
+      "rot_deg": 0.8404252688184204,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -11.389313120239581,
+      "width_cm": 4.684938117861748,
+      "mirrored": false,
+      "outward": -0.0022689534816890955,
+      "pos_cm": 1.5893060714006424,
+      "rot_deg": 1.6220779337676448,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -22.688401149090588,
+      "width_cm": 5.174453929066658,
+      "mirrored": false,
+      "outward": 0.23292995989322662,
+      "pos_cm": 1.0407092981040478,
+      "rot_deg": 1.7588517248452096,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "pudding",
+    "shape": "ycb_008_pudding_box",
+    "category": "kitchen",
+    "case": "ycb_008_pudding_box.v002__it000051__q414__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -25.93621074094501,
+      "width_cm": 7.4102602899074554,
+      "mirrored": false,
+      "outward": 0.08915530890226364,
+      "pos_cm": 1.0013359598815441,
+      "rot_deg": 0.9204129204973522,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -11.414126343720593,
+      "width_cm": 6.570398062467575,
+      "mirrored": false,
+      "outward": -0.03770272433757782,
+      "pos_cm": 0.8575930260121822,
+      "rot_deg": 0.9072576559907903,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -28.586817620077493,
+      "width_cm": 4.989791288971901,
+      "mirrored": false,
+      "outward": -0.07529883086681366,
+      "pos_cm": 1.3508801348507404,
+      "rot_deg": 0.8012017869317115,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "scissors",
+    "shape": "ycb_037_scissors",
+    "category": "tools",
+    "case": "ycb_037_scissors.v004__it000051__q527__s1",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -22.060141566212597,
+      "width_cm": 5.718938261270523,
+      "mirrored": false,
+      "outward": 0.11016769707202911,
+      "pos_cm": 0.9123210795223713,
+      "rot_deg": 0.5706692954262941,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "clamp",
+    "shape": "ycb_052_extra_large_clamp",
+    "category": "tools",
+    "case": "ycb_052_extra_large_clamp.v002__it000051__q1451__s2",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -46.84077821469254,
+      "width_cm": 3.0006321147084236,
+      "mirrored": false,
+      "outward": -0.032677240669727325,
+      "pos_cm": 0.14162331353873014,
+      "rot_deg": 0.037652691790058056,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "wrench",
+    "shape": "ycb_042_adjustable_wrench",
+    "category": "tools",
+    "case": "ycb_042_adjustable_wrench.v001__it000051__q492__s1",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 1.8088138115719123,
+      "width_cm": 5.5582065135240555,
+      "mirrored": false,
+      "outward": 0.022943716496229172,
+      "pos_cm": 0.07268516928888857,
+      "rot_deg": 0.10072233175073184,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   }
+  ],
+  [
+   {
+    "label": "fork",
+    "shape": "ycb_030_fork",
+    "category": "kitchen",
+    "case": "ycb_030_fork.v001__it000051__q1109__s1",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 3.798741188044114,
+      "width_cm": 2.500000037252903,
+      "mirrored": false,
+      "outward": 0.05507872626185417,
+      "pos_cm": 0.09800498373806477,
+      "rot_deg": 0.1334816132171923,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "sponge",
+    "shape": "ycb_026_sponge",
+    "category": "kitchen",
+    "case": "ycb_026_sponge.v001__it000051__q511__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 6.289306062752618,
+      "width_cm": 7.999999821186066,
+      "mirrored": false,
+      "outward": -0.06553249061107635,
+      "pos_cm": 1.5881465747952461,
+      "rot_deg": 2.60960055778984,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -42.78802399896294,
+      "width_cm": 4.4206105172634125,
+      "mirrored": false,
+      "outward": 0.07685371488332748,
+      "pos_cm": 1.7402825877070427,
+      "rot_deg": 0.8769398336472788,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 24.249999251861652,
+      "width_cm": 7.999999821186066,
+      "mirrored": false,
+      "outward": -0.030444564297795296,
+      "pos_cm": 1.2648400850594044,
+      "rot_deg": 1.1944848263929861,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "pudding",
+    "shape": "ycb_008_pudding_box",
+    "category": "kitchen",
+    "case": "ycb_008_pudding_box.v002__it000051__q414__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -14.602051398253282,
+      "width_cm": 7.999999821186066,
+      "mirrored": false,
+      "outward": -0.06769917160272598,
+      "pos_cm": 1.5356367453932762,
+      "rot_deg": 1.0301039442987587,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -51.878643784223904,
+      "width_cm": 7.999999821186066,
+      "mirrored": false,
+      "outward": -0.11923035979270935,
+      "pos_cm": 3.8667645305395126,
+      "rot_deg": 2.2255774405741042,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -2.674980622629083,
+      "width_cm": 3.0574092641472816,
+      "mirrored": false,
+      "outward": -0.01254289411008358,
+      "pos_cm": 0.9374331682920456,
+      "rot_deg": 1.8777112103903004,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "scissors",
+    "shape": "ycb_037_scissors",
+    "category": "tools",
+    "case": "ycb_037_scissors.v004__it000051__q527__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -16.10940072354152,
+      "width_cm": 6.927653402090073,
+      "mirrored": false,
+      "outward": 0.1447167545557022,
+      "pos_cm": 1.4946791343390942,
+      "rot_deg": 0.5938931659039539,
+      "sorted": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -69.24999025881698,
+      "width_cm": 5.33239021897316,
+      "mirrored": false,
+      "outward": 0.2636382579803467,
+      "pos_cm": 3.701091557741165,
+      "rot_deg": 1.1883610281935408,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "clamp",
+    "shape": "ycb_052_extra_large_clamp",
+    "category": "tools",
+    "case": "ycb_052_extra_large_clamp.v002__it000051__q1451__s2",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -46.52464973914767,
+      "width_cm": 4.73564974963665,
+      "mirrored": false,
+      "outward": 0.09217949211597443,
+      "pos_cm": 0.7362947799265385,
+      "rot_deg": 0.4491247451245949,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "wrench",
+    "shape": "ycb_042_adjustable_wrench",
+    "category": "tools",
+    "case": "ycb_042_adjustable_wrench.v001__it000051__q492__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 4.883520369762002,
+      "width_cm": 6.485442817211151,
+      "mirrored": false,
+      "outward": 0.057687267661094666,
+      "pos_cm": 0.5463575944304466,
+      "rot_deg": 0.23839097099106094,
+      "sorted": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 26.45769056143361,
+      "width_cm": 2.500000037252903,
+      "mirrored": false,
+      "outward": -0.1754147708415985,
+      "pos_cm": 0.04613574419636279,
+      "rot_deg": 0.10130855408058935,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   }
+  ],
+  [
+   {
+    "label": "fork",
+    "shape": "ycb_030_fork",
+    "category": "kitchen",
+    "case": "ycb_030_fork.v001__it000051__q1109__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -3.6131658020685142,
+      "width_cm": 2.917085215449333,
+      "mirrored": false,
+      "outward": 0.06518425792455673,
+      "pos_cm": 0.09332125773653388,
+      "rot_deg": 0.055023870551490495,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -8.396373744811477,
+      "width_cm": 2.500000037252903,
+      "mirrored": false,
+      "outward": 0.2039836049079895,
+      "pos_cm": 0.10787182254716754,
+      "rot_deg": 0.13917522956084583,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 1.3342280422122141,
+      "width_cm": 4.751984402537346,
+      "mirrored": false,
+      "outward": -0.04771246016025543,
+      "pos_cm": 1.1811592616140842,
+      "rot_deg": 1.4798770237859757,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "sponge",
+    "shape": "ycb_026_sponge",
+    "category": "kitchen",
+    "case": "ycb_026_sponge.v001__it000051__q511__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -10.984905303445943,
+      "width_cm": 5.234761908650398,
+      "mirrored": false,
+      "outward": 0.13940560817718506,
+      "pos_cm": 1.1468718759715557,
+      "rot_deg": 1.6066100098967988,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 4.7316741654552175,
+      "width_cm": 7.999999821186066,
+      "mirrored": false,
+      "outward": -0.09923646599054337,
+      "pos_cm": 1.0702885687351227,
+      "rot_deg": 1.9303510514367657,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -23.16890324965369,
+      "width_cm": 7.999999821186066,
+      "mirrored": false,
+      "outward": -0.16586238145828247,
+      "pos_cm": 1.765967532992363,
+      "rot_deg": 2.3190315038928038,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "pudding",
+    "shape": "ycb_008_pudding_box",
+    "category": "kitchen",
+    "case": "ycb_008_pudding_box.v002__it000051__q414__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -47.35461676104718,
+      "width_cm": 3.4977424889802933,
+      "mirrored": false,
+      "outward": 0.7373793125152588,
+      "pos_cm": 1.3297110795974731,
+      "rot_deg": 0.7316890841186405,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -30.771760984618723,
+      "width_cm": 6.57232403755188,
+      "mirrored": false,
+      "outward": 0.5464138388633728,
+      "pos_cm": 2.7192173525691032,
+      "rot_deg": 15.874443923640372,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -30.29387313896044,
+      "width_cm": 7.999999821186066,
+      "mirrored": false,
+      "outward": 0.4718766212463379,
+      "pos_cm": 1.4480718411505222,
+      "rot_deg": 1.9384243350357206,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "scissors",
+    "shape": "ycb_037_scissors",
+    "category": "tools",
+    "case": "ycb_037_scissors.v004__it000051__q527__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -42.690779180654886,
+      "width_cm": 5.661933124065399,
+      "mirrored": false,
+      "outward": 0.17913170158863068,
+      "pos_cm": 1.268650870770216,
+      "rot_deg": 0.5242201670887991,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -66.97637737847064,
+      "width_cm": 7.038596272468567,
+      "mirrored": false,
+      "outward": 0.27612078189849854,
+      "pos_cm": 10.493264347314835,
+      "rot_deg": 6.963392799866809,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -25.331815839027048,
+      "width_cm": 5.147381499409676,
+      "mirrored": false,
+      "outward": 0.07749788463115692,
+      "pos_cm": 1.5855832025408745,
+      "rot_deg": 0.5725891655524494,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "clamp",
+    "shape": "ycb_052_extra_large_clamp",
+    "category": "tools",
+    "case": "ycb_052_extra_large_clamp.v002__it000051__q1451__s2",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -57.38007087762945,
+      "width_cm": 2.8159895911812782,
+      "mirrored": false,
+      "outward": -0.15014804899692535,
+      "pos_cm": 0.8123402483761311,
+      "rot_deg": 0.7005195692021403,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "wrench",
+    "shape": "ycb_042_adjustable_wrench",
+    "category": "tools",
+    "case": "ycb_042_adjustable_wrench.v001__it000051__q492__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 0.4623574895895541,
+      "width_cm": 6.450037658214569,
+      "mirrored": false,
+      "outward": 0.036254916340112686,
+      "pos_cm": 0.7373557426035404,
+      "rot_deg": 0.232873218678322,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -26.005175160994632,
+      "width_cm": 5.405571311712265,
+      "mirrored": true,
+      "outward": 0.42483025789260864,
+      "pos_cm": 0.12095361016690731,
+      "rot_deg": 0.08221484029709804,
+      "sorted": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -3.303511918969993,
+      "width_cm": 5.624273791909218,
+      "mirrored": false,
+      "outward": 0.08515474945306778,
+      "pos_cm": 0.08069736650213599,
+      "rot_deg": 0.10155242651851318,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   }
+  ],
+  [
+   {
+    "label": "fork",
+    "shape": "ycb_030_fork",
+    "category": "kitchen",
+    "case": "ycb_030_fork.v001__it000051__q1109__s1",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 5.423653863760726,
+      "width_cm": 2.500000037252903,
+      "mirrored": false,
+      "outward": -0.1229124367237091,
+      "pos_cm": 0.08094801451079547,
+      "rot_deg": 0.0952108626784208,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "sponge",
+    "shape": "ycb_026_sponge",
+    "category": "kitchen",
+    "case": "ycb_026_sponge.v001__it000051__q511__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -5.266788324187628,
+      "width_cm": 7.999999821186066,
+      "mirrored": false,
+      "outward": -0.11463827639818192,
+      "pos_cm": 1.444245409220457,
+      "rot_deg": 2.5826153341527656,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 0.06381779913884142,
+      "width_cm": 6.462346017360687,
+      "mirrored": false,
+      "outward": 0.2313598096370697,
+      "pos_cm": 0.2135149436071515,
+      "rot_deg": 0.29210323177849745,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 7.956162076388631,
+      "width_cm": 7.999999821186066,
+      "mirrored": false,
+      "outward": -0.02000536397099495,
+      "pos_cm": 1.091612409800291,
+      "rot_deg": 2.4217545608020337,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "pudding",
+    "shape": "ycb_008_pudding_box",
+    "category": "kitchen",
+    "case": "ycb_008_pudding_box.v002__it000051__q414__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -34.500979384648566,
+      "width_cm": 6.61296620965004,
+      "mirrored": false,
+      "outward": 0.2238919585943222,
+      "pos_cm": 1.039703469723463,
+      "rot_deg": 1.0233939237694558,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -7.97258697379522,
+      "width_cm": 3.82087305188179,
+      "mirrored": false,
+      "outward": 0.1878359019756317,
+      "pos_cm": 0.856745894998312,
+      "rot_deg": 1.0627719920469891,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -47.881852723458806,
+      "width_cm": 6.149408966302872,
+      "mirrored": false,
+      "outward": 0.20528729259967804,
+      "pos_cm": 1.228305883705616,
+      "rot_deg": 0.9880045792455041,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "scissors",
+    "shape": "ycb_037_scissors",
+    "category": "tools",
+    "case": "ycb_037_scissors.v004__it000051__q527__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -19.30056926415632,
+      "width_cm": 5.939839407801628,
+      "mirrored": false,
+      "outward": 0.11389941722154617,
+      "pos_cm": 1.2600838206708431,
+      "rot_deg": 0.5058886864084254,
+      "sorted": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -42.16651435053222,
+      "width_cm": 5.463401228189468,
+      "mirrored": false,
+      "outward": -0.06124125421047211,
+      "pos_cm": 0.3849171567708254,
+      "rot_deg": 0.08766399723344594,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "clamp",
+    "shape": "ycb_052_extra_large_clamp",
+    "category": "tools",
+    "case": "ycb_052_extra_large_clamp.v002__it000051__q1451__s2",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -56.15692743125274,
+      "width_cm": 3.722047805786133,
+      "mirrored": false,
+      "outward": 0.2636793553829193,
+      "pos_cm": 1.9826536998152733,
+      "rot_deg": 1.7566473880122937,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "wrench",
+    "shape": "ycb_042_adjustable_wrench",
+    "category": "tools",
+    "case": "ycb_042_adjustable_wrench.v001__it000051__q492__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 4.177437184594063,
+      "width_cm": 6.389683485031128,
+      "mirrored": false,
+      "outward": 0.047218769788742065,
+      "pos_cm": 0.6018434185534716,
+      "rot_deg": 0.19649631150970845,
+      "sorted": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -27.99767282302887,
+      "width_cm": 4.975297674536705,
+      "mirrored": true,
+      "outward": 0.39741986989974976,
+      "pos_cm": 0.11642832541838288,
+      "rot_deg": 0.08470795939575186,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   }
+  ],
+  [
+   {
+    "label": "fork",
+    "shape": "ycb_030_fork",
+    "category": "kitchen",
+    "case": "ycb_030_fork.v001__it000051__q1109__s1",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 2.5733527438645822,
+      "width_cm": 2.500000037252903,
+      "mirrored": false,
+      "outward": -0.05341897904872894,
+      "pos_cm": 0.09137109736911952,
+      "rot_deg": 0.09790656625507425,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "sponge",
+    "shape": "ycb_026_sponge",
+    "category": "kitchen",
+    "case": "ycb_026_sponge.v001__it000051__q511__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -9.94238535589657,
+      "width_cm": 6.8780481815338135,
+      "mirrored": false,
+      "outward": -0.017095357179641724,
+      "pos_cm": 1.1429261416196823,
+      "rot_deg": 1.4736659272312014,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 7.7040384497823045,
+      "width_cm": 7.999999821186066,
+      "mirrored": false,
+      "outward": -0.02719399705529213,
+      "pos_cm": 1.5345074236392975,
+      "rot_deg": 2.7973093106640112,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -17.686759487822385,
+      "width_cm": 6.096784397959709,
+      "mirrored": false,
+      "outward": -0.07091696560382843,
+      "pos_cm": 1.4510519802570343,
+      "rot_deg": 1.5830040223515884,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "pudding",
+    "shape": "ycb_008_pudding_box",
+    "category": "kitchen",
+    "case": "ycb_008_pudding_box.v002__it000051__q414__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -16.822713237059094,
+      "width_cm": 2.708096243441105,
+      "mirrored": false,
+      "outward": 0.06972065567970276,
+      "pos_cm": 0.8977747522294521,
+      "rot_deg": 0.7264348543779025,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -2.0204062418697375,
+      "width_cm": 6.463214010000229,
+      "mirrored": false,
+      "outward": 0.24646414816379547,
+      "pos_cm": 0.6105445791035891,
+      "rot_deg": 0.34532035721196086,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -20.189660111058757,
+      "width_cm": 7.999999821186066,
+      "mirrored": false,
+      "outward": 0.07453417032957077,
+      "pos_cm": 2.8536124154925346,
+      "rot_deg": 2.2681779707577086,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "scissors",
+    "shape": "ycb_037_scissors",
+    "category": "tools",
+    "case": "ycb_037_scissors.v004__it000051__q527__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -26.42670028562197,
+      "width_cm": 5.585713684558868,
+      "mirrored": false,
+      "outward": 0.16531038284301758,
+      "pos_cm": 1.8928464502096176,
+      "rot_deg": 0.9171254650724604,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -47.12844529196597,
+      "width_cm": 7.113739103078842,
+      "mirrored": false,
+      "outward": 0.29324114322662354,
+      "pos_cm": 1.5020322054624557,
+      "rot_deg": 0.7164135261224657,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -50.46424138070849,
+      "width_cm": 5.354504287242889,
+      "mirrored": false,
+      "outward": 0.2583252191543579,
+      "pos_cm": 1.531576830893755,
+      "rot_deg": 0.711721132801814,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "clamp",
+    "shape": "ycb_052_extra_large_clamp",
+    "category": "tools",
+    "case": "ycb_052_extra_large_clamp.v002__it000051__q1451__s2",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -50.30112963313942,
+      "width_cm": 4.517097771167755,
+      "mirrored": false,
+      "outward": 0.12455818057060242,
+      "pos_cm": 1.0847078636288643,
+      "rot_deg": 0.9354210872596916,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "wrench",
+    "shape": "ycb_042_adjustable_wrench",
+    "category": "tools",
+    "case": "ycb_042_adjustable_wrench.v001__it000051__q492__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 1.175606076805365,
+      "width_cm": 6.380826979875565,
+      "mirrored": false,
+      "outward": 0.06363020092248917,
+      "pos_cm": 0.5043565295636654,
+      "rot_deg": 0.2246892113096187,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -1.4107571102110334,
+      "width_cm": 6.055601313710213,
+      "mirrored": false,
+      "outward": -0.0024321014061570168,
+      "pos_cm": 0.7653082720935345,
+      "rot_deg": 0.44245242403785934,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 21.241567299848665,
+      "width_cm": 2.500000037252903,
+      "mirrored": false,
+      "outward": -0.23213104903697968,
+      "pos_cm": 0.041417661122977734,
+      "rot_deg": 0.10120488728363589,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   }
+  ],
+  [
+   {
+    "label": "fork",
+    "shape": "ycb_030_fork",
+    "category": "kitchen",
+    "case": "ycb_030_fork.v001__it000051__q1109__s1",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 0.8514844656625817,
+      "width_cm": 2.927098236978054,
+      "mirrored": false,
+      "outward": -0.007242137566208839,
+      "pos_cm": 0.09316588984802365,
+      "rot_deg": 0.06782536594360011,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "sponge",
+    "shape": "ycb_026_sponge",
+    "category": "kitchen",
+    "case": "ycb_026_sponge.v001__it000051__q511__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -11.153812466525773,
+      "width_cm": 6.867878884077072,
+      "mirrored": false,
+      "outward": 0.08663800358772278,
+      "pos_cm": 1.178258005529642,
+      "rot_deg": 1.576410115038176,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -9.311653244539036,
+      "width_cm": 7.999999821186066,
+      "mirrored": false,
+      "outward": 0.1643385887145996,
+      "pos_cm": 1.3168678618967533,
+      "rot_deg": 1.4346465506067994,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 12.394060414131491,
+      "width_cm": 7.999999821186066,
+      "mirrored": false,
+      "outward": -0.021606897935271263,
+      "pos_cm": 0.9004749357700348,
+      "rot_deg": 1.7920367325362454,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "pudding",
+    "shape": "ycb_008_pudding_box",
+    "category": "kitchen",
+    "case": "ycb_008_pudding_box.v002__it000051__q414__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -23.931280427074054,
+      "width_cm": 4.180765151977539,
+      "mirrored": false,
+      "outward": 0.2510523796081543,
+      "pos_cm": 0.8965866640210152,
+      "rot_deg": 0.7553846111750016,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -6.531644589599256,
+      "width_cm": 5.5585552006959915,
+      "mirrored": false,
+      "outward": -0.05888906866312027,
+      "pos_cm": 0.9785415604710579,
+      "rot_deg": 1.3040908997165908,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -44.188001042951285,
+      "width_cm": 5.256909504532814,
+      "mirrored": false,
+      "outward": 0.6963777542114258,
+      "pos_cm": 1.1480421759188175,
+      "rot_deg": 0.456613460580132,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "scissors",
+    "shape": "ycb_037_scissors",
+    "category": "tools",
+    "case": "ycb_037_scissors.v004__it000051__q527__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -12.17343164356174,
+      "width_cm": 6.106138229370117,
+      "mirrored": false,
+      "outward": 0.05081062763929367,
+      "pos_cm": 1.0204744525253773,
+      "rot_deg": 0.23421535085022951,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -21.304761917596917,
+      "width_cm": 5.560525506734848,
+      "mirrored": false,
+      "outward": 0.1735871434211731,
+      "pos_cm": 1.2088527902960777,
+      "rot_deg": 0.7621639474522094,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -49.242484462733294,
+      "width_cm": 7.999999821186066,
+      "mirrored": false,
+      "outward": 0.43770524859428406,
+      "pos_cm": 1.926194503903389,
+      "rot_deg": 1.0515322754374985,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "clamp",
+    "shape": "ycb_052_extra_large_clamp",
+    "category": "tools",
+    "case": "ycb_052_extra_large_clamp.v002__it000051__q1451__s2",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -47.81473928467426,
+      "width_cm": 4.306332394480705,
+      "mirrored": false,
+      "outward": 0.03478270769119263,
+      "pos_cm": 0.8409029804170132,
+      "rot_deg": 0.6418526731825207,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "wrench",
+    "shape": "ycb_042_adjustable_wrench",
+    "category": "tools",
+    "case": "ycb_042_adjustable_wrench.v001__it000051__q492__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 4.067992794654717,
+      "width_cm": 6.417069584131241,
+      "mirrored": false,
+      "outward": 0.03132057189941406,
+      "pos_cm": 0.8204986341297626,
+      "rot_deg": 0.3072783646495319,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 5.849095248103419,
+      "width_cm": 6.884880363941193,
+      "mirrored": false,
+      "outward": -0.0002508368343114853,
+      "pos_cm": 1.2246416881680489,
+      "rot_deg": 0.6729385716425412,
+      "sorted": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -3.089310783296046,
+      "width_cm": 2.500000037252903,
+      "mirrored": false,
+      "outward": 0.07085587084293365,
+      "pos_cm": 0.07953766034916043,
+      "rot_deg": 0.09439860377571818,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   }
+  ],
+  [
+   {
+    "label": "fork",
+    "shape": "ycb_030_fork",
+    "category": "kitchen",
+    "case": "ycb_030_fork.v001__it000051__q1109__s1",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -1.2645617135036709,
+      "width_cm": 2.5574708357453346,
+      "mirrored": false,
+      "outward": 0.0316634476184845,
+      "pos_cm": 0.09397941757924855,
+      "rot_deg": 0.08226561314862356,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "sponge",
+    "shape": "ycb_026_sponge",
+    "category": "kitchen",
+    "case": "ycb_026_sponge.v001__it000051__q511__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -4.938414173234571,
+      "width_cm": 7.999999821186066,
+      "mirrored": false,
+      "outward": -0.11319516599178314,
+      "pos_cm": 1.6358399763703346,
+      "rot_deg": 2.2182879211824083,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -10.285493078662991,
+      "width_cm": 6.930065155029297,
+      "mirrored": false,
+      "outward": 0.049385178834199905,
+      "pos_cm": 1.076246239244938,
+      "rot_deg": 1.5419619492375107,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -22.85173487780769,
+      "width_cm": 5.9365082532167435,
+      "mirrored": false,
+      "outward": 0.05900464951992035,
+      "pos_cm": 1.4658899046480656,
+      "rot_deg": 1.590488735743159,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "pudding",
+    "shape": "ycb_008_pudding_box",
+    "category": "kitchen",
+    "case": "ycb_008_pudding_box.v002__it000051__q414__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -38.24402891774769,
+      "width_cm": 4.384784400463104,
+      "mirrored": false,
+      "outward": 0.00532473623752594,
+      "pos_cm": 1.0967102833092213,
+      "rot_deg": 0.5427192542081027,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -61.14993231831546,
+      "width_cm": 7.999999821186066,
+      "mirrored": false,
+      "outward": -0.022177159786224365,
+      "pos_cm": 4.4663093984127045,
+      "rot_deg": 3.3060079262248094,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -42.25651575322548,
+      "width_cm": 5.214797332882881,
+      "mirrored": false,
+      "outward": 0.4457795321941376,
+      "pos_cm": 3.9265718311071396,
+      "rot_deg": 6.5011896298638145,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "scissors",
+    "shape": "ycb_037_scissors",
+    "category": "tools",
+    "case": "ycb_037_scissors.v004__it000051__q527__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -26.79038907590493,
+      "width_cm": 5.713212117552757,
+      "mirrored": false,
+      "outward": 0.13253583014011383,
+      "pos_cm": 1.0451726615428925,
+      "rot_deg": 0.25991268362235953,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 1.058743034210328,
+      "width_cm": 6.968624144792557,
+      "mirrored": false,
+      "outward": 0.003294609487056732,
+      "pos_cm": 1.5042717568576336,
+      "rot_deg": 0.12484129051499392,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -21.345640599779443,
+      "width_cm": 7.305990159511566,
+      "mirrored": false,
+      "outward": 0.2215043306350708,
+      "pos_cm": 1.3723579235374928,
+      "rot_deg": 0.883467573503107,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "clamp",
+    "shape": "ycb_052_extra_large_clamp",
+    "category": "tools",
+    "case": "ycb_052_extra_large_clamp.v002__it000051__q1451__s2",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -46.44186443131253,
+      "width_cm": 2.908770926296711,
+      "mirrored": false,
+      "outward": -0.08173681795597076,
+      "pos_cm": 0.03365159791428596,
+      "rot_deg": 0.09751172262410933,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 10.947543314912327,
+      "width_cm": 3.3217784017324448,
+      "mirrored": false,
+      "outward": -0.1716095358133316,
+      "pos_cm": 0.05910001345910132,
+      "rot_deg": 0.09448750962674074,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -44.10783511266285,
+      "width_cm": 2.9342500492930412,
+      "mirrored": false,
+      "outward": 0.7069318890571594,
+      "pos_cm": 6.011560559272766,
+      "rot_deg": 57.43264967386021,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "wrench",
+    "shape": "ycb_042_adjustable_wrench",
+    "category": "tools",
+    "case": "ycb_042_adjustable_wrench.v001__it000051__q492__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 3.281561185081453,
+      "width_cm": 5.624489486217499,
+      "mirrored": false,
+      "outward": -0.007893674075603485,
+      "pos_cm": 0.7235860917717218,
+      "rot_deg": 0.5020524679724054,
+      "sorted": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 12.11232791747316,
+      "width_cm": 2.500000037252903,
+      "mirrored": false,
+      "outward": -0.19967132806777954,
+      "pos_cm": 0.04908308619633317,
+      "rot_deg": 0.09861599212414983,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   }
+  ],
+  [
+   {
+    "label": "fork",
+    "shape": "ycb_030_fork",
+    "category": "kitchen",
+    "case": "ycb_030_fork.v001__it000051__q1109__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -0.04663388695557567,
+      "width_cm": 2.524058148264885,
+      "mirrored": false,
+      "outward": -0.007304449565708637,
+      "pos_cm": 0.3780675586313009,
+      "rot_deg": 0.3896579165592904,
+      "sorted": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 50.47626251364772,
+      "width_cm": 2.500000037252903,
+      "mirrored": false,
+      "outward": -0.7581596374511719,
+      "pos_cm": 0.05601161974482238,
+      "rot_deg": 0.06969351606309117,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "sponge",
+    "shape": "ycb_026_sponge",
+    "category": "kitchen",
+    "case": "ycb_026_sponge.v001__it000051__q511__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -13.128923882027749,
+      "width_cm": 5.0772711634635925,
+      "mirrored": false,
+      "outward": 0.04252919927239418,
+      "pos_cm": 1.3632568530738354,
+      "rot_deg": 1.4374257972687599,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 3.9537681260700093,
+      "width_cm": 7.744015008211136,
+      "mirrored": false,
+      "outward": -0.122238390147686,
+      "pos_cm": 0.5253279116004705,
+      "rot_deg": 0.6542198512527395,
+      "sorted": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -6.557974541962832,
+      "width_cm": 7.59955421090126,
+      "mirrored": false,
+      "outward": 0.12594656646251678,
+      "pos_cm": 0.43805474415421486,
+      "rot_deg": 0.5094432662628882,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "pudding",
+    "shape": "ycb_008_pudding_box",
+    "category": "kitchen",
+    "case": "ycb_008_pudding_box.v002__it000051__q414__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -21.38106366836242,
+      "width_cm": 2.500000037252903,
+      "mirrored": false,
+      "outward": 0.3224208652973175,
+      "pos_cm": 0.8512082509696484,
+      "rot_deg": 1.5899480835816702,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -27.91989233630806,
+      "width_cm": 7.999999821186066,
+      "mirrored": false,
+      "outward": -0.020949244499206543,
+      "pos_cm": 2.6493899524211884,
+      "rot_deg": 0.9648336960947648,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -12.810029179869023,
+      "width_cm": 6.571771204471588,
+      "mirrored": false,
+      "outward": 0.11340129375457764,
+      "pos_cm": 0.9858332574367523,
+      "rot_deg": 0.9919977853107287,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "scissors",
+    "shape": "ycb_037_scissors",
+    "category": "tools",
+    "case": "ycb_037_scissors.v004__it000051__q527__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -19.14195007351382,
+      "width_cm": 6.70492947101593,
+      "mirrored": false,
+      "outward": 0.12255825102329254,
+      "pos_cm": 1.2348038144409657,
+      "rot_deg": 0.8186697289297546,
+      "sorted": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -39.36501322470853,
+      "width_cm": 5.605185031890869,
+      "mirrored": false,
+      "outward": 0.06587433815002441,
+      "pos_cm": 0.7770283613353968,
+      "rot_deg": 0.18295946354412498,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "clamp",
+    "shape": "ycb_052_extra_large_clamp",
+    "category": "tools",
+    "case": "ycb_052_extra_large_clamp.v002__it000051__q1451__s2",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -54.6199914340273,
+      "width_cm": 2.576999180018902,
+      "mirrored": false,
+      "outward": -0.08953971415758133,
+      "pos_cm": 1.0565787553787231,
+      "rot_deg": 0.806472878701963,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "wrench",
+    "shape": "ycb_042_adjustable_wrench",
+    "category": "tools",
+    "case": "ycb_042_adjustable_wrench.v001__it000051__q492__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 5.068662465612129,
+      "width_cm": 6.204015016555786,
+      "mirrored": false,
+      "outward": 0.027811337262392044,
+      "pos_cm": 0.5012165755033493,
+      "rot_deg": 0.11983006609832018,
+      "sorted": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 24.21009216408856,
+      "width_cm": 2.500000037252903,
+      "mirrored": false,
+      "outward": -0.3651594817638397,
+      "pos_cm": 0.032575702061876655,
+      "rot_deg": 0.10009408107911628,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   }
+  ],
+  [
+   {
+    "label": "fork",
+    "shape": "ycb_030_fork",
+    "category": "kitchen",
+    "case": "ycb_030_fork.v001__it000051__q1109__s1",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 4.960732670121234,
+      "width_cm": 2.500000037252903,
+      "mirrored": false,
+      "outward": -0.09051544964313507,
+      "pos_cm": 0.08258128655143082,
+      "rot_deg": 0.09842856212837116,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "sponge",
+    "shape": "ycb_026_sponge",
+    "category": "kitchen",
+    "case": "ycb_026_sponge.v001__it000051__q511__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -7.177652845922347,
+      "width_cm": 7.999999821186066,
+      "mirrored": false,
+      "outward": -0.06973421573638916,
+      "pos_cm": 1.7516547814011574,
+      "rot_deg": 2.6951988363459667,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 10.652531222960198,
+      "width_cm": 7.999999821186066,
+      "mirrored": false,
+      "outward": -0.005670768674463034,
+      "pos_cm": 1.603049412369728,
+      "rot_deg": 2.599462636070837,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -29.917779017597443,
+      "width_cm": 5.236935615539551,
+      "mirrored": false,
+      "outward": 0.5325993895530701,
+      "pos_cm": 0.1060236245393753,
+      "rot_deg": 0.06659257682937232,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "pudding",
+    "shape": "ycb_008_pudding_box",
+    "category": "kitchen",
+    "case": "ycb_008_pudding_box.v002__it000051__q414__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -39.383625490196806,
+      "width_cm": 7.999999821186066,
+      "mirrored": false,
+      "outward": 0.021184638142585754,
+      "pos_cm": 3.042939677834511,
+      "rot_deg": 1.3329741688909877,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -11.767529722887161,
+      "width_cm": 7.821110635995865,
+      "mirrored": false,
+      "outward": 0.001996055245399475,
+      "pos_cm": 1.0866631753742695,
+      "rot_deg": 1.2006295420467648,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -16.247385912701407,
+      "width_cm": 5.651720240712166,
+      "mirrored": false,
+      "outward": 0.1196155920624733,
+      "pos_cm": 0.9760699234902859,
+      "rot_deg": 1.0146803099358122,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "scissors",
+    "shape": "ycb_037_scissors",
+    "category": "tools",
+    "case": "ycb_037_scissors.v004__it000051__q527__s1",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -24.655662969688926,
+      "width_cm": 5.355756729841232,
+      "mirrored": false,
+      "outward": 0.10033920407295227,
+      "pos_cm": 1.1964699253439903,
+      "rot_deg": 0.7047341160851555,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "clamp",
+    "shape": "ycb_052_extra_large_clamp",
+    "category": "tools",
+    "case": "ycb_052_extra_large_clamp.v002__it000051__q1451__s2",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -43.859270868387746,
+      "width_cm": 3.9415180683135986,
+      "mirrored": false,
+      "outward": 0.05074765533208847,
+      "pos_cm": 0.572847155854106,
+      "rot_deg": 0.15998214688724674,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "wrench",
+    "shape": "ycb_042_adjustable_wrench",
+    "category": "tools",
+    "case": "ycb_042_adjustable_wrench.v001__it000051__q492__s1",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 1.3362812611097434,
+      "width_cm": 5.656572803854942,
+      "mirrored": false,
+      "outward": -0.007006154395639896,
+      "pos_cm": 0.598544254899025,
+      "rot_deg": 0.5355012383592802,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   }
+  ],
+  [
+   {
+    "label": "fork",
+    "shape": "ycb_030_fork",
+    "category": "kitchen",
+    "case": "ycb_030_fork.v001__it000051__q1109__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 0.059554420405324576,
+      "width_cm": 2.500000037252903,
+      "mirrored": false,
+      "outward": 0.02763584814965725,
+      "pos_cm": 0.09540090686641634,
+      "rot_deg": 0.06587517351278958,
+      "sorted": false
+     },
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -13.472454222749064,
+      "width_cm": 3.536912053823471,
+      "mirrored": false,
+      "outward": 0.2306508719921112,
+      "pos_cm": 0.19234950887039304,
+      "rot_deg": 0.19105750657882134,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "sponge",
+    "shape": "ycb_026_sponge",
+    "category": "kitchen",
+    "case": "ycb_026_sponge.v001__it000051__q511__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -13.283325430857765,
+      "width_cm": 5.482922121882439,
+      "mirrored": false,
+      "outward": 0.22385311126708984,
+      "pos_cm": 0.9055483154952526,
+      "rot_deg": 0.6535249862263964,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -22.195276858941302,
+      "width_cm": 5.843957886099815,
+      "mirrored": false,
+      "outward": 0.2601335942745209,
+      "pos_cm": 1.0228069499135017,
+      "rot_deg": 1.523567502750726,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": 8.642580720049281,
+      "width_cm": 7.142379879951477,
+      "mirrored": false,
+      "outward": -0.158164843916893,
+      "pos_cm": 1.2566824443638325,
+      "rot_deg": 1.1230714633608005,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "pudding",
+    "shape": "ycb_008_pudding_box",
+    "category": "kitchen",
+    "case": "ycb_008_pudding_box.v002__it000051__q414__s3",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -32.33033843622935,
+      "width_cm": 2.500000037252903,
+      "mirrored": false,
+      "outward": 0.5379377603530884,
+      "pos_cm": 1.1239074170589447,
+      "rot_deg": 1.1638985989594344,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -19.68911652792354,
+      "width_cm": 6.183630973100662,
+      "mirrored": false,
+      "outward": 0.10317999124526978,
+      "pos_cm": 1.0665460489690304,
+      "rot_deg": 0.9545649335644738,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -27.591952756140945,
+      "width_cm": 6.325357407331467,
+      "mirrored": false,
+      "outward": 0.3208902180194855,
+      "pos_cm": 0.8326896466314793,
+      "rot_deg": 0.9046377448355615,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "scissors",
+    "shape": "ycb_037_scissors",
+    "category": "tools",
+    "case": "ycb_037_scissors.v004__it000051__q527__s1",
+    "tries": [
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -31.6052899501704,
+      "width_cm": 5.76748326420784,
+      "mirrored": false,
+      "outward": 0.18321797251701355,
+      "pos_cm": 1.170400157570839,
+      "rot_deg": 0.49598661965919943,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -7.485913797317009,
+      "width_cm": 7.913150638341904,
+      "mirrored": false,
+      "outward": 0.11157643795013428,
+      "pos_cm": 1.3591211289167404,
+      "rot_deg": 0.2621595490550293,
+      "sorted": false
+     },
+     {
+      "lifted": false,
+      "reachable": true,
+      "psi_deg": -16.043791633921668,
+      "width_cm": 7.975857704877853,
+      "mirrored": false,
+      "outward": 0.1560644507408142,
+      "pos_cm": 1.5049004927277565,
+      "rot_deg": 0.8972007360464754,
+      "sorted": false
+     }
+    ],
+    "sorted": false
+   },
+   {
+    "label": "clamp",
+    "shape": "ycb_052_extra_large_clamp",
+    "category": "tools",
+    "case": "ycb_052_extra_large_clamp.v002__it000051__q1451__s2",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": -49.04615750523045,
+      "width_cm": 3.9819136261940002,
+      "mirrored": false,
+      "outward": 0.21043315529823303,
+      "pos_cm": 1.4022137969732285,
+      "rot_deg": 0.6095172769912109,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   },
+   {
+    "label": "wrench",
+    "shape": "ycb_042_adjustable_wrench",
+    "category": "tools",
+    "case": "ycb_042_adjustable_wrench.v001__it000051__q492__s1",
+    "tries": [
+     {
+      "lifted": true,
+      "reachable": true,
+      "psi_deg": 2.857980600400765,
+      "width_cm": 5.700889602303505,
+      "mirrored": false,
+      "outward": 0.030593834817409515,
+      "pos_cm": 0.34395160619169474,
+      "rot_deg": 0.277625845419862,
+      "sorted": true
+     }
+    ],
+    "sorted": true
+   }
+  ]
+ ]
+}

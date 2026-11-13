@@ -18,3 +18,6 @@
 14:06 trained D_s3 → data/grasp_logs/paper_v2/D_s3/grasp_pose_envs256_20261104_095933/grasp_pose_final.pt
 14:06 v2 RL + demos done
 14:13 curve done
+11:14 start A_s4 (fresh control)
+14:56 trained A_s4 → data/grasp_logs/paper_v2/A_s4/grasp_pose_envs256_20261105_111613/grasp_pose_final.pt
+15:03 A_s4 tested

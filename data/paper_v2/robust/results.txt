@@ -1,0 +1,22 @@
+both D_s1 flat 122/198 hard: demo cases: 32.3% of 96 attempts heldout cases: 16.2% of 130 attempts 
+both A_s1 flat 121/194 hard: demo cases: 21.9% of 96 attempts heldout cases: 16.2% of 130 attempts 
+both D_s2 flat 128/195 hard: demo cases: 40.6% of 96 attempts heldout cases: 22.3% of 130 attempts 
+both A_s2 flat 112/198 hard: demo cases: 20.8% of 96 attempts heldout cases: 20.0% of 130 attempts 
+both D_s3 flat 115/198 hard: demo cases: 25.0% of 96 attempts heldout cases: 22.3% of 130 attempts 
+both A_s3 flat 121/198 hard: demo cases: 20.8% of 96 attempts heldout cases: 14.6% of 130 attempts 
+both A_s4 flat 110/194 hard: demo cases: 22.9% of 96 attempts heldout cases: 20.8% of 130 attempts 
+free D_s1 flat 143/198 hard: demo cases: 40.6% of 96 attempts heldout cases: 38.5% of 130 attempts 
+free A_s1 flat 150/193 hard: demo cases: 30.2% of 96 attempts heldout cases: 31.5% of 130 attempts 
+free D_s2 flat 148/194 hard: demo cases: 52.1% of 96 attempts heldout cases: 43.1% of 130 attempts 
+free A_s2 flat 130/193 hard: demo cases: 30.2% of 96 attempts heldout cases: 25.4% of 130 attempts 
+free D_s3 flat 143/194 hard: demo cases: 34.4% of 96 attempts heldout cases: 36.9% of 130 attempts 
+free A_s3 flat 152/198 hard: demo cases: 28.1% of 96 attempts heldout cases: 26.9% of 130 attempts 
+free A_s4 flat 130/193 hard: demo cases: 34.4% of 96 attempts heldout cases: 39.2% of 130 attempts 
+phys D_s1 flat 161/199 hard: demo cases: 41.7% of 96 attempts heldout cases: 32.3% of 130 attempts 
+phys A_s1 flat 156/196 hard: demo cases: 20.8% of 96 attempts heldout cases: 26.9% of 130 attempts 
+phys D_s2 flat 160/197 hard: demo cases: 44.8% of 96 attempts heldout cases: 51.5% of 130 attempts 
+phys A_s2 flat 146/195 hard: demo cases: 29.2% of 96 attempts heldout cases: 26.2% of 130 attempts 
+phys D_s3 flat 159/194 hard: demo cases: 39.6% of 96 attempts heldout cases: 42.3% of 130 attempts 
+phys A_s3 flat 162/199 hard: demo cases: 27.1% of 96 attempts heldout cases: 22.3% of 130 attempts 
+phys A_s4 flat 154/199 hard: demo cases: 31.2% of 96 attempts heldout cases: 32.3% of 130 attempts 
+done
